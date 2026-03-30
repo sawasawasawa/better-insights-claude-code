@@ -276,7 +276,7 @@ def _right_panel_html(data, days):
     if has_agents:
         glance_try_parts.append("Track which agent sessions find real work vs idle heartbeats")
     if not glance_try_parts:
-        glance_try_parts.append("Review your project token allocation to ensure effort matches priorities")
+        glance_try_parts.append(f"Run /better-insights periodically to track how your {i['human_msgs']:,} messages compare over time")
     glance_try = ". ".join(glance_try_parts) + "."
 
     # How You Use CC narrative
@@ -336,18 +336,18 @@ def _right_panel_html(data, days):
         top_proj_pct = (i['projects'][0][1]['tokens'] * 100 // max(i['input_tokens'] + i['output_tokens'], 1)) if i['projects'] and (i['input_tokens'] + i['output_tokens']) > 0 else 0
         features.append(("Token Budget Per Project", f"Your top project uses {top_proj_pct}% of interactive tokens. The remaining {100 - top_proj_pct}% is spread across {n_projects - 1}+ other projects."))
     if i["count"] > 10:
-        features.append(("Post-Edit Validation Hooks", f"With {i['count']} sessions, auto-running type checks after edits would catch recurring bugs before they cascade into debugging."))
+        features.append(("Post-Edit Validation Hooks", f"With {i['count']} sessions, auto-running type checks after edits catches errors at the source. Add a postEdit hook in settings.json."))
 
     # Horizon
     horizons = []
     if has_agents:
         horizons.append(("Intelligent Agent Scheduling", f"Instead of {a['count']:,} fixed-interval heartbeats, agents could predict when assignments are likely and only check during high-probability windows."))
-    if uses_single_model and len(all_models) < 3:
-        horizons.append(("Cost-Aware Model Selection", f"Currently {top_model_pct}% of responses use {top_model}. Routing lower-complexity tasks to smaller models could reduce costs while maintaining quality where it matters."))
+    if uses_single_model and "opus" in top_model.lower():
+        horizons.append(("Cost-Aware Model Selection", f"Currently {top_model_pct}% of responses use {top_model}. Routing simpler tasks to Sonnet or Haiku would reduce costs."))
     if n_projects > 5:
         horizons.append(("Cross-Project Knowledge", f"You work across {n_projects}+ projects. Patterns learned in one codebase (fixes, configs) could be shared across others to avoid re-discovering them."))
     if not horizons:
-        horizons.append(("Better Usage Insights", "As your usage grows, trends will emerge. Running /better-insights regularly builds a picture of how your Claude Code usage evolves over time."))
+        horizons.append(("Usage Trends", f"With {i['count']} sessions and {i['human_msgs']:,} messages so far, running /better-insights periodically will show how your usage changes over time."))
 
     return f"""
 <!-- AT A GLANCE -->
@@ -397,9 +397,8 @@ def _right_panel_html(data, days):
   </div>
   <h4 class="R-muted" style="font-size:.85rem;margin-bottom:6px">Models Used</h4>
   {mtable()}
-  <div class="R-narrative" style="margin-top:12px">
-    <p>Your interactive sessions consume {fmt(i['input_tokens'])} input and {fmt(i['output_tokens'])} output tokens. Agent infrastructure adds {fmt(a['input_tokens'])} input and {fmt(a['output_tokens'])} output. Cache reads total {fmt(total_cache_read)}, {total_cache_read // max(total_input + total_output, 1)}x the direct token usage.</p>
-  </div>
+  {"" if not has_agents else f'<div class="R-narrative" style="margin-top:12px"><p>Interactive: {fmt(i["input_tokens"])} input, {fmt(i["output_tokens"])} output. Agents: {fmt(a["input_tokens"])} input, {fmt(a["output_tokens"])} output.</p></div>'}
+  {"" if total_cache_read < total_input + total_output else f'<div class="R-narrative" style="margin-top:12px"><p>Cache reads ({fmt(total_cache_read)}) are {total_cache_read // max(total_input + total_output, 1)}x your direct token usage.</p></div>'}
 </div>
 
 <!-- IMPRESSIVE THINGS -->
@@ -408,12 +407,12 @@ def _right_panel_html(data, days):
   {"".join(f'<div class="R-win"><div class="R-win-t">{t}</div><div class="R-win-d">{d}</div></div>' for t, d in wins)}
 </div>
 
-<!-- AGENT INFRASTRUCTURE -->
+{"" if not has_agents else f'''
 <div class="R-sec" id="rs-agents">
   <h3 class="R-h2">Agent Infrastructure</h3>
-  <p class="R-muted" style="margin-bottom:12px">{a['count']:,} automated sessions ({a_sess_day}/day). These are heartbeats, queue operations, and autonomous agent cycles running without your direct involvement:</p>
-  {ptable(a['projects'], color="#d97706", compact=True)}
-</div>
+  <p class="R-muted" style="margin-bottom:12px">{a["count"]:,} automated sessions ({a_sess_day}/day):</p>
+  {ptable(a["projects"], color="#d97706", compact=True)}
+</div>'''}
 
 <!-- WHERE THINGS GO WRONG -->
 <div class="R-sec" id="rs-friction">
