@@ -197,13 +197,13 @@ def fmt(n):
     return str(n)
 
 
-def generate_html(data, days):
-    """Generate a standalone HTML report."""
-    period = "all time" if days == 9999 else f"last {days} days"
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+def _right_panel_html(data, days):
+    """Generate the corrected right panel content."""
     i = data["interactive"]
     a = data["automated"]
     s = data["subagent"]
+    period = "all time" if days == 9999 else f"last {days} days"
+    days_d = max(days, 1) if days != 9999 else 1
 
     total_input = i["input_tokens"] + a["input_tokens"] + s["input_tokens"]
     total_output = i["output_tokens"] + a["output_tokens"] + s["output_tokens"]
@@ -215,101 +215,185 @@ def generate_html(data, days):
         for m, c in bucket["models"].items():
             all_models[m] += c
 
-    def project_table(projects, n=12, bar_color="#2563eb"):
+    def ptable(projects, n=12, color="#2563eb"):
         if not projects:
-            return "<p style='color:#64748b'>No sessions</p>"
+            return "<p class='muted'>No sessions</p>"
         rows = ""
-        max_count = projects[0][1]["count"] if projects else 1
+        mx = projects[0][1]["count"] if projects else 1
         for proj, d in projects[:n]:
-            w = min(d["count"] / max(max_count, 1) * 100, 100)
-            tokens = d.get("tokens", 0)
-            rows += f"""<tr>
-                <td class="pn">{html_mod.escape(proj)}</td>
-                <td class="n">{d['count']:,}</td>
-                <td class="n">{d['human_msgs']:,}</td>
-                <td class="n">{fmt(tokens)}</td>
-                <td class="bc"><div class="b" style="width:{w}%;background:{bar_color}"></div></td>
-            </tr>"""
-        return f"""<table>
-            <tr><th>Project</th><th class="n">Sessions</th><th class="n">Messages</th><th class="n">Tokens</th><th></th></tr>
-            {rows}
-        </table>"""
-
-    def model_table():
-        rows = ""
-        for model, count in sorted(all_models.items(), key=lambda x: -x[1]):
-            rows += f"<tr><td>{html_mod.escape(model)}</td><td class='n'>{count:,}</td></tr>"
+            w = min(d["count"] / max(mx, 1) * 100, 100)
+            rows += f'<div class="rp-area"><div class="rp-hd"><span class="rp-nm">{html_mod.escape(proj)}</span><span class="rp-ct">{d["count"]} sessions</span></div><div class="rp-st">{d["human_msgs"]:,} messages &middot; {fmt(d.get("tokens",0))} tokens</div><div class="rp-bt"><div class="rp-bf" style="width:{w}%;background:{color}"></div></div></div>'
         return rows
 
-    days_d = max(days, 1) if days != 9999 else 1
+    def mtable():
+        rows = ""
+        for model, count in sorted(all_models.items(), key=lambda x: -x[1]):
+            rows += f'<div class="rp-mr"><span>{html_mod.escape(model)}</span><span class="muted">{count:,}</span></div>'
+        return rows
+
     i_per_day = f"{i['human_msgs'] / days_d:,.0f}" if days != 9999 else "N/A"
     i_sess_day = f"{i['count'] / days_d:.1f}" if days != 9999 else "N/A"
     a_sess_day = f"{a['count'] / days_d:,.0f}" if days != 9999 else "N/A"
+    out_in = i['output_tokens'] / max(i['input_tokens'], 1)
+    tok_per_msg = (i['input_tokens'] + i['output_tokens']) // max(i['human_msgs'], 1)
+
+    return f"""
+<div class="rp-stats">
+  <div class="rp-stat"><div class="rp-sv">{i['human_msgs']:,}</div><div class="rp-sl">Your Messages</div></div>
+  <div class="rp-stat"><div class="rp-sv">{i['count']}</div><div class="rp-sl">Sessions</div></div>
+  <div class="rp-stat"><div class="rp-sv">{fmt(total_input + total_output)}</div><div class="rp-sl">Tokens</div></div>
+  <div class="rp-stat"><div class="rp-sv">{days if days != 9999 else 'all'}</div><div class="rp-sl">Days</div></div>
+  <div class="rp-stat"><div class="rp-sv">{i_per_day}</div><div class="rp-sl">Msgs/Day</div></div>
+</div>
+
+<div class="rp-sec"><h2>What You Work On</h2>
+<p class="muted" style="margin-bottom:12px">Based on {i['count']} interactive sessions. Top projects:</p>
+{ptable(i['projects'])}
+</div>
+
+<div class="rp-sec"><h2>Token Usage</h2>
+<div class="rp-tg">
+  <div class="rp-tc"><div class="rp-tl">Input</div><div class="rp-tv" style="color:#2563eb">{fmt(total_input)}</div></div>
+  <div class="rp-tc"><div class="rp-tl">Output</div><div class="rp-tv" style="color:#16a34a">{fmt(total_output)}</div></div>
+  <div class="rp-tc"><div class="rp-tl">Cache Read</div><div class="rp-tv" style="color:#0891b2">{fmt(total_cache_read)}</div></div>
+  <div class="rp-tc"><div class="rp-tl">Out/In Ratio</div><div class="rp-tv" style="color:#7c3aed">{out_in:.1f}x</div></div>
+</div>
+<h3 class="muted" style="font-size:.85rem;margin-bottom:6px">Models Used</h3>
+{mtable()}
+</div>
+
+<div class="rp-sec"><h2>Agent Infrastructure</h2>
+<p class="muted" style="margin-bottom:12px">{a['count']:,} automated sessions ({a_sess_day}/day). Top projects:</p>
+{ptable(a['projects'], color="#d97706")}
+</div>
+
+<div class="rp-sec"><h2>What /insights Gets Wrong</h2>
+<div class="rp-fix"><span class="old">Counts tool results as your messages</span> &rarr; <span class="new">{i['tool_results']:,} tool results excluded, only {i['human_msgs']:,} human messages counted</span></div>
+<div class="rp-fix"><span class="old">Analyzes ~12 sessions</span> &rarr; <span class="new">Scanned {i['count'] + a['count'] + s['count']:,} sessions ({i['count']} interactive + {a['count']:,} automated)</span></div>
+<div class="rp-fix"><span class="old">Misses nested project paths</span> &rarr; <span class="new">{data['nested_count']:,} sessions recovered ({data['nested_pct']:.0f}% of total were invisible)</span></div>
+</div>
+"""
+
+
+def generate_html(data, days):
+    """Generate split-view HTML if original /insights report exists, otherwise standalone."""
+    import re
+    period = "all time" if days == 9999 else f"last {days} days"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    i = data["interactive"]
+    a = data["automated"]
+    days_d = max(days, 1) if days != 9999 else 1
+    i_per_day = f"{i['human_msgs'] / days_d:,.0f}" if days != 9999 else "N/A"
+
+    right_content = _right_panel_html(data, days)
+
+    # Check for original /insights report
+    original_path = os.path.join(CLAUDE_DIR, "usage-data", "report.html")
+    has_original = os.path.exists(original_path)
+
+    if has_original:
+        with open(original_path) as f:
+            orig = f.read()
+        body_m = re.search(r'<body>(.*?)</body>', orig, re.DOTALL)
+        style_m = re.search(r'<style>(.*?)</style>', orig, re.DOTALL)
+        script_m = re.search(r'<script>(.*?)</script>', orig, re.DOTALL)
+        orig_body = body_m.group(1) if body_m else ""
+        orig_styles = style_m.group(1) if style_m else ""
+        orig_scripts = script_m.group(1) if script_m else ""
+        # Try to extract the stats line from original for the label
+        stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
+        orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
+    else:
+        orig_body = '<div style="display:flex;align-items:center;justify-content:center;height:80vh;color:#64748b;font-size:1.1rem;text-align:center;padding:2rem"><div><p style="font-size:2rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> in Claude Code first,<br>then run this again to see the comparison.</p></div></div>'
+        orig_styles = ""
+        orig_scripts = ""
+        orig_label = "not available"
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Full Insights - {period}</title>
+<title>Better Insights - {period}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f0f4f8;color:#334155;padding:2rem;line-height:1.5}}
-.c{{max-width:960px;margin:0 auto}}
-h1{{font-size:1.8rem;font-weight:700;color:#0f172a;margin-bottom:.25rem}}
-.sub{{color:#64748b;font-size:.95rem;margin-bottom:2rem}}
-.g{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:2rem}}
-.cd{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1.25rem}}
-.cl{{color:#64748b;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}}
-.cv{{font-size:1.5rem;font-weight:700}}
-.ct{{color:#64748b;font-size:.75rem;margin-top:.2rem}}
-.s{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1.5rem;margin-bottom:1.5rem}}
-.s h2{{font-size:1.1rem;font-weight:600;color:#0f172a;margin-bottom:1rem}}
-.badge{{display:inline-block;padding:.1rem .5rem;border-radius:10px;font-size:.7rem;font-weight:600;text-transform:uppercase}}
-.bb{{background:rgba(37,99,235,.1);color:#2563eb}}.bo{{background:rgba(217,119,6,.1);color:#d97706}}.bp{{background:rgba(124,58,237,.1);color:#7c3aed}}
-table{{width:100%;border-collapse:collapse;font-size:.9rem}}
-th{{text-align:left;color:#64748b;font-weight:500;padding:.5rem .75rem;border-bottom:1px solid #e2e8f0;font-size:.75rem;text-transform:uppercase}}
-td{{padding:.45rem .75rem;border-bottom:1px solid #f1f5f9}}
-.n{{text-align:right;font-variant-numeric:tabular-nums}}
-.pn{{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
-.bc{{width:100px}}.b{{height:6px;border-radius:3px;min-width:2px}}
-tr:hover{{background:#f8fafc}}
-.tg{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1rem}}
-.tc{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.75rem 1rem;text-align:center}}
-.tl{{color:#64748b;font-size:.7rem;text-transform:uppercase}}.tv{{font-size:1.2rem;font-weight:700;margin-top:.1rem}}.ts{{color:#64748b;font-size:.7rem}}
-.cmp{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:1rem 1.25rem;font-size:.9rem}}
-.cmp strong{{color:#2563eb}}.cmp .old{{color:#dc2626;text-decoration:line-through;opacity:.6}}
-.ft{{text-align:center;color:#64748b;font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid #e2e8f0}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f0f4f8;color:#334155;line-height:1.6}}
+.top{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-bottom:2px solid #6ee7b7;text-align:center;padding:1rem}}
+.top h1{{font-size:1.3rem;font-weight:700;color:#065f46}}
+.top .sub{{color:#047857;font-size:.8rem;margin-top:.15rem}}
+.top .toggle{{margin-top:.5rem}}
+.top .toggle button{{font-size:.75rem;padding:4px 14px;border-radius:6px;border:1px solid #6ee7b7;background:rgba(6,95,70,.08);color:#065f46;cursor:pointer;margin:0 3px}}
+.top .toggle button:hover{{background:rgba(6,95,70,.18)}}
+.top .toggle button.active{{background:#065f46;color:#fff}}
+.split{{display:grid;grid-template-columns:1fr 1fr}}
+.split.hide-left{{grid-template-columns:0fr 1fr}}
+.split.hide-left .pl{{overflow:hidden;min-width:0;opacity:0;padding:0}}
+.panel{{overflow-y:auto;height:calc(100vh - 80px)}}
+.pl{{background:#f8fafc;border-right:3px solid #e2e8f0;transition:all .3s}}
+.pl .lb{{position:sticky;top:0;z-index:10;background:#fef2f2;color:#991b1b;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #fca5a5}}
+.pl .lb .s{{text-decoration:line-through;opacity:.6}}
+.pl .ow{{opacity:.85}}.pl .ow .container{{max-width:100%;padding:24px}}
+.pr{{background:#f0f4f8}}
+.pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #6ee7b7}}
+.rp{{padding:1.5rem}}
+{orig_styles}
+.muted{{color:#64748b;font-size:.85rem}}
+.rp-stats{{display:flex;gap:12px;margin-bottom:24px;padding:16px 0;border-top:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;flex-wrap:wrap}}
+.rp-stat{{text-align:center;flex:1;min-width:70px}}
+.rp-sv{{font-size:22px;font-weight:700;color:#0f172a}}
+.rp-sl{{font-size:11px;color:#64748b;text-transform:uppercase}}
+.rp-sec{{margin-bottom:28px}}
+.rp-sec h2{{font-size:18px;font-weight:600;color:#0f172a;margin-bottom:12px}}
+.rp-area{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px}}
+.rp-hd{{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}}
+.rp-nm{{font-weight:600;font-size:13px;color:#0f172a}}
+.rp-ct{{font-size:11px;color:#64748b;background:#f1f5f9;padding:1px 7px;border-radius:4px}}
+.rp-st{{font-size:12px;color:#475569;margin-bottom:4px}}
+.rp-bt{{height:5px;background:#f1f5f9;border-radius:3px}}
+.rp-bf{{height:100%;border-radius:3px;min-width:2px}}
+.rp-tg{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}}
+.rp-tc{{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;text-align:center}}
+.rp-tl{{font-size:10px;color:#64748b;text-transform:uppercase}}
+.rp-tv{{font-size:18px;font-weight:700;margin-top:2px}}
+.rp-mr{{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #f1f5f9}}
+.rp-fix{{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px}}
+.rp-fix .old{{color:#dc2626;text-decoration:line-through}}
+.rp-fix .new{{color:#16a34a;font-weight:600}}
+@media(max-width:1024px){{.split{{grid-template-columns:1fr!important}}.pl{{display:none}}.rp-tg{{grid-template-columns:repeat(2,1fr)}}}}
 </style></head>
-<body><div class="c">
-<h1>Full Insights</h1>
-<p class="sub">Generated {now} &middot; {period} &middot; {i['count']+a['count']+s['count']:,} total sessions</p>
-<div class="g">
-  <div class="cd"><div class="cl">Your Sessions</div><div class="cv" style="color:#2563eb">{i['count']:,}</div><div class="ct">{i_sess_day}/day</div></div>
-  <div class="cd"><div class="cl">Your Messages</div><div class="cv" style="color:#16a34a">{i['human_msgs']:,}</div><div class="ct">{i_per_day}/day (excl. tool results)</div></div>
-  <div class="cd"><div class="cl">Agent Sessions</div><div class="cv" style="color:#d97706">{a['count']:,}</div><div class="ct">{a_sess_day}/day infrastructure</div></div>
-  <div class="cd"><div class="cl">Input Tokens</div><div class="cv" style="color:#7c3aed">{fmt(total_input)}</div><div class="ct">You: {fmt(i['input_tokens'])} / Agents: {fmt(a['input_tokens'])}</div></div>
-  <div class="cd"><div class="cl">Output Tokens</div><div class="cv" style="color:#0891b2">{fmt(total_output)}</div><div class="ct">You: {fmt(i['output_tokens'])} / Agents: {fmt(a['output_tokens'])}</div></div>
-  <div class="cd"><div class="cl">Cache Savings</div><div class="cv" style="color:#16a34a">{fmt(total_cache_read)}</div><div class="ct">tokens read from cache</div></div>
+<body>
+<div class="top">
+  <h1>Better Insights for Claude Code</h1>
+  <div class="sub">Original /insights ({orig_label}) vs corrected ({i['human_msgs']:,} messages, {i['count']} sessions, {i_per_day} msgs/day)</div>
+  <div class="toggle">
+    <button class="active" onclick="setView('split')">Split View</button>
+    <button onclick="setView('corrected')">Corrected Only</button>
+  </div>
 </div>
-<div class="s"><h2><span class="badge bb">Interactive</span> Your Usage</h2>{project_table(i['projects'])}</div>
-<div class="s"><h2><span class="badge bo">Automated</span> Agent Infrastructure</h2>{project_table(a['projects'], bar_color="#d97706")}</div>
-{"" if s['count'] == 0 else f'<div class="s"><h2><span class="badge bp">Subagent</span> Spawned Sessions</h2><p style="color:#64748b">{s["count"]:,} sessions &middot; {s["human_msgs"]+s["asst_msgs"]:,} messages &middot; {fmt(s["input_tokens"]+s["output_tokens"])} tokens</p></div>'}
-<div class="s"><h2>Token Usage</h2>
-<div class="tg">
-  <div class="tc"><div class="tl">Input</div><div class="tv" style="color:#2563eb">{fmt(total_input)}</div><div class="ts">{total_input:,}</div></div>
-  <div class="tc"><div class="tl">Output</div><div class="tv" style="color:#16a34a">{fmt(total_output)}</div><div class="ts">{total_output:,}</div></div>
-  <div class="tc"><div class="tl">Cache Read</div><div class="tv" style="color:#0891b2">{fmt(total_cache_read)}</div><div class="ts">saved reprocessing</div></div>
-  <div class="tc"><div class="tl">Cache Write</div><div class="tv" style="color:#d97706">{fmt(total_cache_write)}</div><div class="ts">stored for reuse</div></div>
+<div class="split" id="split">
+  <div class="panel pl" id="left-panel">
+    <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
+    <div class="ow">{orig_body}</div>
+  </div>
+  <div class="panel pr">
+    <div class="lb">BETTER INSIGHTS &mdash; {i['human_msgs']:,} messages &middot; {i['count']} sessions &middot; {i_per_day} msgs/day</div>
+    <div class="rp">{right_content}</div>
+  </div>
 </div>
-<h3 style="font-size:.85rem;color:#64748b;margin-bottom:.5rem">Models Used</h3>
-<table><tr><th>Model</th><th class="n">Responses</th></tr>{model_table()}</table>
-</div>
-<div class="s"><h2>vs /insights</h2>
-<div class="cmp">
-  <p><strong>/insights</strong> analyzes ~12 sessions and counts tool results as messages</p>
-  <p style="margin-top:.5rem"><strong>Full scan:</strong> {i['human_msgs']:,} human messages across {i['count']:,} interactive + {a['count']:,} automated sessions</p>
-  <p style="margin-top:.5rem;color:#64748b">/insights misses {data['nested_count']:,} sessions in nested path ({data['nested_pct']:.0f}% of total)</p>
-</div></div>
-<div class="ft">claude-code-full-insights &middot; {now}</div>
-</div></body></html>"""
+<script>
+function setView(mode) {{
+  var split = document.getElementById('split');
+  var btns = document.querySelectorAll('.toggle button');
+  btns.forEach(function(b) {{ b.classList.remove('active'); }});
+  if (mode === 'corrected') {{
+    split.classList.add('hide-left');
+    btns[1].classList.add('active');
+  }} else {{
+    split.classList.remove('hide-left');
+    btns[0].classList.add('active');
+  }}
+}}
+{orig_scripts}
+</script>
+</body></html>"""
 
 
 def open_file(path):
