@@ -285,7 +285,7 @@ def _right_panel_html(data, days):
     if has_agents:
         usage_paras.append(f"Behind your interactive work, <strong>{a['count']:,} automated sessions</strong> run continuously ({a_sess_day}/day), generating {agent_ratio:.0f}x more sessions than you do manually.")
     if out_in > 3:
-        usage_paras.append(f"Your sessions are <strong>output-heavy</strong> ({out_in:.1f}x more output than input), meaning Claude generates far more than it reads when you're driving. This is typical of creative building work.")
+        usage_paras.append(f"Your sessions are <strong>output-heavy</strong> ({out_in:.1f}x more output than input), meaning Claude generates {out_in:.1f}x more text than it reads per interaction.")
     elif out_in < 0.5:
         usage_paras.append(f"Your sessions are <strong>input-heavy</strong> ({1/out_in:.1f}x more input than output), suggesting context-heavy work like code review or research.")
     if uses_single_model:
@@ -297,7 +297,7 @@ def _right_panel_html(data, days):
     if has_agents and agent_ratio > 10:
         key_pattern = f"One human orchestrating an AI workforce. For every message you type, your infrastructure runs {a['count'] // max(i['human_msgs'], 1)} automated sessions."
     elif n_projects > 5:
-        key_pattern = f"A multi-project power user running {n_projects}+ codebases with focused, purposeful sessions averaging {msgs_per_session} messages each."
+        key_pattern = f"Active across {n_projects}+ codebases with an average of {msgs_per_session} messages per session."
     else:
         key_pattern = f"Focused work across {n_projects} project{'s' if n_projects != 1 else ''} with {i['human_msgs']:,} messages. /insights captured a fraction of this."
 
@@ -373,7 +373,7 @@ def _right_panel_html(data, days):
   <p class="R-muted" style="margin-bottom:12px">Based on {i['count']} interactive sessions (vs 12 in original). Your top projects by session count, with token consumption:</p>
   {ptable(i['projects'], compact=True)}
   <div class="R-narrative" style="margin-top:16px">
-    <p>Your top project consumes {fmt(i['projects'][0][1]['tokens']) if i['projects'] else '0'} tokens across {i['projects'][0][1]['count'] if i['projects'] else 0} sessions. You context-switch across {len(i.get('projects', []))}+ distinct codebases weekly, averaging ~{i['human_msgs']//max(i['count'],1)} messages per session. Sessions are focused work units, not sprawling debugging marathons.</p>
+    <p>Your top project consumes {fmt(i['projects'][0][1]['tokens']) if i['projects'] else '0'} tokens across {i['projects'][0][1]['count'] if i['projects'] else 0} sessions. You work across {len(i.get('projects', []))}+ distinct codebases, averaging ~{i['human_msgs']//max(i['count'],1)} messages per session.</p>
   </div>
 </div>
 
@@ -398,7 +398,7 @@ def _right_panel_html(data, days):
   <h4 class="R-muted" style="font-size:.85rem;margin-bottom:6px">Models Used</h4>
   {mtable()}
   <div class="R-narrative" style="margin-top:12px">
-    <p>Your interactive sessions consume {fmt(i['input_tokens'])} input and {fmt(i['output_tokens'])} output tokens. Agent infrastructure adds {fmt(a['input_tokens'])} input and {fmt(a['output_tokens'])} output. Cache reads at {fmt(total_cache_read)} dwarf everything else, saving massive reprocessing costs.</p>
+    <p>Your interactive sessions consume {fmt(i['input_tokens'])} input and {fmt(i['output_tokens'])} output tokens. Agent infrastructure adds {fmt(a['input_tokens'])} input and {fmt(a['output_tokens'])} output. Cache reads total {fmt(total_cache_read)}, {total_cache_read // max(total_input + total_output, 1)}x the direct token usage.</p>
   </div>
 </div>
 
