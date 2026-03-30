@@ -357,7 +357,8 @@ def generate_html(data, days):
         with open(original_path) as f:
             orig = f.read()
         body_m = re.search(r'<body>(.*?)</body>', orig, re.DOTALL)
-        orig_body = body_m.group(1) if body_m else ""
+        style_m = re.search(r'(<style>.*?</style>)', orig, re.DOTALL)
+        orig_body = (style_m.group(1) if style_m else "") + (body_m.group(1) if body_m else "")
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
@@ -409,8 +410,11 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 .pr{{background:#f0f4f8}}
 .pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.3rem;font-weight:600;font-size:.72rem;border-bottom:2px solid #6ee7b7}}
 
+/* === OVERRIDE leaked original styles === */
+.pr,.pr *{{box-sizing:border-box}}
+.pr .R-wrap{{padding:24px 32px !important;max-width:100%}}
+.pr h3,.pr h4{{font-size:inherit;margin:0}}
 /* === RIGHT PANEL (all prefixed R- to avoid conflicts) === */
-.R-wrap{{padding:24px 28px;max-width:100%}}
 .R-muted{{color:#64748b;font-size:13px}}
 .R-glance{{background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);border:1px solid #6ee7b7;border-radius:12px;padding:18px 22px;margin-bottom:24px}}
 .R-glance-t{{font-size:15px;font-weight:700;color:#065f46;margin-bottom:10px}}
