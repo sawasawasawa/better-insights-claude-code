@@ -474,8 +474,42 @@ def generate_html(data, days):
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
-        orig_body = '<div style="display:flex;align-items:center;justify-content:center;height:80vh;color:#64748b;font-size:1.1rem;text-align:center;padding:2rem"><div><p style="font-size:2rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> first.</p></div></div>'
-        orig_label = "run /insights first"
+        # Generate a synthetic "what /insights would show" left panel
+        inflated_msgs = i["human_msgs"] + i["tool_results"]
+        direct_sessions = data["direct_count"]
+        orig_body = f"""<style>
+.si-wrap{{padding:24px;font-family:'Inter',-apple-system,sans-serif;color:#334155;line-height:1.6;max-width:100%}}
+.si-wrap h1{{font-size:28px;font-weight:700;color:#0f172a;margin-bottom:6px}}
+.si-wrap .si-sub{{color:#64748b;font-size:14px;margin-bottom:24px}}
+.si-stats{{display:flex;gap:24px;padding:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;margin-bottom:24px;flex-wrap:wrap}}
+.si-stat{{text-align:center}}.si-sv{{font-size:24px;font-weight:700;color:#0f172a}}.si-sl{{font-size:11px;color:#64748b;text-transform:uppercase}}
+.si-note{{background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:18px 22px;margin-bottom:24px}}
+.si-note-t{{font-size:15px;font-weight:700;color:#92400e;margin-bottom:10px}}
+.si-note p{{font-size:13px;color:#78350f;line-height:1.6;margin-bottom:6px}}
+.si-issue{{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 16px;margin-bottom:8px;font-size:13px;color:#991b1b}}
+.si-issue strong{{color:#7f1d1d}}
+</style>
+<div class="si-wrap">
+<h1>What /insights Would Report</h1>
+<p class="si-sub">Simulated based on the same data, using /insights methodology</p>
+<div class="si-stats">
+  <div class="si-stat"><div class="si-sv">{inflated_msgs:,}</div><div class="si-sl">Messages</div></div>
+  <div class="si-stat"><div class="si-sv">{direct_sessions:,}</div><div class="si-sl">Sessions</div></div>
+  <div class="si-stat"><div class="si-sv">{days if days != 9999 else '?'}</div><div class="si-sl">Days</div></div>
+  <div class="si-stat"><div class="si-sv">{inflated_msgs // max(days_d, 1):,}</div><div class="si-sl">Msgs/Day</div></div>
+</div>
+<div class="si-note">
+  <div class="si-note-t">Why These Numbers Are Wrong</div>
+  <p>The stats above simulate what /insights would report. Here's what it gets wrong:</p>
+</div>
+<div class="si-issue"><strong>Message inflation:</strong> /insights counts tool results (API responses sent as "user" role) as your messages. {i['tool_results']:,} tool results are mixed in with your {i['human_msgs']:,} actual messages, inflating the count to {inflated_msgs:,}.</div>
+{"" if data['nested_count'] == 0 else f'<div class="si-issue"><strong>Missing sessions:</strong> {data["nested_count"]:,} sessions ({data["nested_pct"]:.0f}%) are stored in a nested path that /insights does not scan. Only {direct_sessions:,} of {direct_sessions + data["nested_count"]:,} total sessions would be visible.</div>'}
+{"" if not has_agents else f'<div class="si-issue"><strong>No agent separation:</strong> {a["count"]:,} automated agent sessions are mixed in with your {i["count"]} interactive sessions. /insights has no concept of automated vs human-initiated sessions.</div>'}
+<div class="si-issue"><strong>Sample size:</strong> /insights deeply analyzes ~12 sessions out of {i['count'] + a['count']:,}. The AI-generated narrative, friction analysis, and recommendations are based on this tiny sample.</div>
+<div class="si-issue"><strong>No token reporting:</strong> /insights does not report input/output tokens, cache usage, or model breakdown. You have no visibility into compute costs.</div>
+</div>"""
+        orig_label = f"{inflated_msgs:,} messages (inflated)"
+        has_original = True  # We have synthetic content to show
 
     # Section mapping for synced scrolling: nav key -> [left section id, right section id]
     section_map_js = """{
@@ -582,8 +616,8 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
   <h1><span class="cmd">/better-insights</span> for Claude Code</h1>
   <div class="sub">Original /insights ({orig_label}) vs corrected ({i['human_msgs']:,} messages, {i['count']} sessions, {i_per_day} msgs/day)</div>
   <div class="toggle">
-    <button class="{'active' if has_original else ''}" onclick="setView('split')">Split View</button>
-    <button class="{'' if has_original else 'active'}" onclick="setView('corrected')">Corrected Only</button>
+    <button class="active" onclick="setView('split')">Split View</button>
+    <button onclick="setView('corrected')">Corrected Only</button>
   </div>
   <div class="nav-row">
     <a onclick="syncScroll('work')">What You Work On</a>
@@ -597,7 +631,7 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
     <a onclick="syncScroll('horizon')">On the Horizon</a>
   </div>
 </div>
-<div class="split{' hide-left' if not has_original else ''}" id="split">
+<div class="split" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
     <div class="ow">{orig_body}</div>
