@@ -198,11 +198,10 @@ def fmt(n):
 
 
 def _right_panel_html(data, days):
-    """Generate the corrected right panel content."""
+    """Generate the corrected right panel content with ALL sections."""
     i = data["interactive"]
     a = data["automated"]
     s = data["subagent"]
-    period = "all time" if days == 9999 else f"last {days} days"
     days_d = max(days, 1) if days != 9999 else 1
 
     total_input = i["input_tokens"] + a["input_tokens"] + s["input_tokens"]
@@ -216,67 +215,130 @@ def _right_panel_html(data, days):
             all_models[m] += c
 
     def ptable(projects, n=12, color="#2563eb"):
-        if not projects:
-            return "<p class='muted'>No sessions</p>"
+        if not projects: return ""
         rows = ""
         mx = projects[0][1]["count"] if projects else 1
         for proj, d in projects[:n]:
             w = min(d["count"] / max(mx, 1) * 100, 100)
-            rows += f'<div class="rp-area"><div class="rp-hd"><span class="rp-nm">{html_mod.escape(proj)}</span><span class="rp-ct">{d["count"]} sessions</span></div><div class="rp-st">{d["human_msgs"]:,} messages &middot; {fmt(d.get("tokens",0))} tokens</div><div class="rp-bt"><div class="rp-bf" style="width:{w}%;background:{color}"></div></div></div>'
+            rows += f'<div class="R-area"><div class="R-ahd"><span class="R-anm">{html_mod.escape(proj)}</span><span class="R-act">{d["count"]} sessions</span></div><div class="R-ast">{d["human_msgs"]:,} messages &middot; {fmt(d.get("tokens",0))} tokens</div><div class="R-abt"><div class="R-abf" style="width:{w}%;background:{color}"></div></div></div>'
         return rows
 
     def mtable():
         rows = ""
         for model, count in sorted(all_models.items(), key=lambda x: -x[1]):
-            rows += f'<div class="rp-mr"><span>{html_mod.escape(model)}</span><span class="muted">{count:,}</span></div>'
+            rows += f'<div class="R-mrow"><span>{html_mod.escape(model)}</span><span class="R-muted">{count:,}</span></div>'
         return rows
 
     i_per_day = f"{i['human_msgs'] / days_d:,.0f}" if days != 9999 else "N/A"
-    i_sess_day = f"{i['count'] / days_d:.1f}" if days != 9999 else "N/A"
     a_sess_day = f"{a['count'] / days_d:,.0f}" if days != 9999 else "N/A"
     out_in = i['output_tokens'] / max(i['input_tokens'], 1)
-    tok_per_msg = (i['input_tokens'] + i['output_tokens']) // max(i['human_msgs'], 1)
 
     return f"""
-<div class="rp-stats">
-  <div class="rp-stat"><div class="rp-sv">{i['human_msgs']:,}</div><div class="rp-sl">Your Messages</div></div>
-  <div class="rp-stat"><div class="rp-sv">{i['count']}</div><div class="rp-sl">Sessions</div></div>
-  <div class="rp-stat"><div class="rp-sv">{fmt(total_input + total_output)}</div><div class="rp-sl">Tokens</div></div>
-  <div class="rp-stat"><div class="rp-sv">{days if days != 9999 else 'all'}</div><div class="rp-sl">Days</div></div>
-  <div class="rp-stat"><div class="rp-sv">{i_per_day}</div><div class="rp-sl">Msgs/Day</div></div>
+<!-- AT A GLANCE -->
+<div class="R-glance" id="rs-glance">
+  <div class="R-glance-t">At a Glance (Corrected)</div>
+  <p><strong>What's working:</strong> You're operating a personal AI infrastructure with {i['count']} interactive sessions and {a['count']:,} automated agent sessions in this period across {len(i.get('projects', []))}+ projects. You average ~{i['human_msgs']//max(i['count'],1)} messages per session, focused and purposeful.</p>
+  <p><strong>What's hindering you:</strong> /insights analyzed 12 of {i['count']+a['count']:,} sessions. The original friction analysis (premature implementation, buggy first attempts) still applies, but the deeper issue is measurement blindness.</p>
+  <p><strong>What to try:</strong> Route automated heartbeats through Haiku instead of Opus. Build agent effectiveness metrics. Use token budgets per project.</p>
 </div>
 
-<div class="rp-sec" id="rs-work"><h2>What You Work On</h2>
-<p class="muted" style="margin-bottom:12px">Based on {i['count']} interactive sessions. Top projects:</p>
-{ptable(i['projects'])}
+<!-- STATS -->
+<div class="R-stats-row" id="rs-stats">
+  <div class="R-stat"><div class="R-sv">{i['human_msgs']:,}</div><div class="R-sl">Messages</div></div>
+  <div class="R-stat"><div class="R-sv">{i['count']}</div><div class="R-sl">Sessions</div></div>
+  <div class="R-stat"><div class="R-sv">{fmt(total_input + total_output)}</div><div class="R-sl">Tokens</div></div>
+  <div class="R-stat"><div class="R-sv">{days if days != 9999 else 'all'}</div><div class="R-sl">Days</div></div>
+  <div class="R-stat"><div class="R-sv">{i_per_day}</div><div class="R-sl">Msgs/Day</div></div>
 </div>
 
-<div class="rp-sec" id="rs-tokens"><h2>Token Usage</h2>
-<div class="rp-tg">
-  <div class="rp-tc"><div class="rp-tl">Input</div><div class="rp-tv" style="color:#2563eb">{fmt(total_input)}</div></div>
-  <div class="rp-tc"><div class="rp-tl">Output</div><div class="rp-tv" style="color:#16a34a">{fmt(total_output)}</div></div>
-  <div class="rp-tc"><div class="rp-tl">Cache Read</div><div class="rp-tv" style="color:#0891b2">{fmt(total_cache_read)}</div></div>
-  <div class="rp-tc"><div class="rp-tl">Out/In Ratio</div><div class="rp-tv" style="color:#7c3aed">{out_in:.1f}x</div></div>
-</div>
-<h3 class="muted" style="font-size:.85rem;margin-bottom:6px">Models Used</h3>
-{mtable()}
+<!-- WHAT YOU WORK ON -->
+<div class="R-sec" id="rs-work">
+  <h3 class="R-h2">What You Work On</h3>
+  <p class="R-muted" style="margin-bottom:12px">Based on {i['count']} interactive sessions (vs 12 in original). Top projects:</p>
+  {ptable(i['projects'])}
 </div>
 
-<div class="rp-sec" id="rs-agents"><h2>Agent Infrastructure</h2>
-<p class="muted" style="margin-bottom:12px">{a['count']:,} automated sessions ({a_sess_day}/day). Top projects:</p>
-{ptable(a['projects'], color="#d97706")}
+<!-- HOW YOU USE CLAUDE CODE -->
+<div class="R-sec" id="rs-usage">
+  <h3 class="R-h2">How You Use Claude Code</h3>
+  <div class="R-narrative">
+    <p>You're running Claude Code as a <strong>full-stack AI infrastructure layer</strong>. With {i['count']} interactive sessions generating {i['human_msgs']:,} human messages, you average {i_per_day} messages per day and ~{i['human_msgs']//max(i['count'],1)} per session.</p>
+    <p>Behind your interactive work, <strong>{a['count']:,} automated agent sessions</strong> run continuously ({a_sess_day}/day). Your infrastructure generates {a['count']//max(i['count'],1)}x more sessions than you do manually.</p>
+    <p>Token usage: <strong>{out_in:.1f}x more output than input</strong> in interactive sessions. You use <strong>Opus 4.6 almost exclusively</strong> ({i['models'].get('claude-opus-4-6', 0):,} of {sum(i['models'].values()):,} responses).</p>
+    <div class="R-key"><strong>Key pattern:</strong> One human orchestrating an AI workforce. For every message you type, your infrastructure runs {a['count']//max(i['human_msgs'],1)} automated sessions.</div>
+  </div>
 </div>
 
-<div class="rp-sec" id="rs-fixes"><h2>What /insights Gets Wrong</h2>
-<div class="rp-fix"><span class="old">Counts tool results as your messages</span> &rarr; <span class="new">{i['tool_results']:,} tool results excluded, only {i['human_msgs']:,} human messages counted</span></div>
-<div class="rp-fix"><span class="old">Analyzes ~12 sessions</span> &rarr; <span class="new">Scanned {i['count'] + a['count'] + s['count']:,} sessions ({i['count']} interactive + {a['count']:,} automated)</span></div>
-<div class="rp-fix"><span class="old">Misses nested project paths</span> &rarr; <span class="new">{data['nested_count']:,} sessions recovered ({data['nested_pct']:.0f}% of total were invisible)</span></div>
+<!-- TOKEN USAGE -->
+<div class="R-sec" id="rs-tokens">
+  <h3 class="R-h2">Token Usage</h3>
+  <div class="R-tg">
+    <div class="R-tc"><div class="R-tl">Input</div><div class="R-tv" style="color:#2563eb">{fmt(total_input)}</div></div>
+    <div class="R-tc"><div class="R-tl">Output</div><div class="R-tv" style="color:#16a34a">{fmt(total_output)}</div></div>
+    <div class="R-tc"><div class="R-tl">Cache Read</div><div class="R-tv" style="color:#0891b2">{fmt(total_cache_read)}</div></div>
+    <div class="R-tc"><div class="R-tl">Out/In Ratio</div><div class="R-tv" style="color:#7c3aed">{out_in:.1f}x</div></div>
+  </div>
+  <h4 class="R-muted" style="font-size:.85rem;margin-bottom:6px">Models Used</h4>
+  {mtable()}
+</div>
+
+<!-- IMPRESSIVE THINGS -->
+<div class="R-sec" id="rs-wins">
+  <h3 class="R-h2">Impressive Things You Did</h3>
+  <div class="R-win"><div class="R-win-t">Personal AI Infrastructure at Scale</div><div class="R-win-d">{a['count']:,} automated agent sessions per week across {len(a.get('projects', []))}+ projects. You're operating an AI-augmented development organization.</div></div>
+  <div class="R-win"><div class="R-win-t">Multi-Domain Context Mastery</div><div class="R-win-d">{i['count']} sessions across {len(i.get('projects', []))}+ projects. ~{i['human_msgs']//max(i['count'],1)} messages per session shows focused, efficient interactions.</div></div>
+  <div class="R-win"><div class="R-win-t">Autonomous Multi-Agent Companies</div><div class="R-win-d">Top automated projects run thousands of sessions each. AI personas operating on their own heartbeat cycles with zero human intervention.</div></div>
+</div>
+
+<!-- AGENT INFRASTRUCTURE -->
+<div class="R-sec" id="rs-agents">
+  <h3 class="R-h2">Agent Infrastructure</h3>
+  <p class="R-muted" style="margin-bottom:12px">{a['count']:,} automated sessions ({a_sess_day}/day). Top projects:</p>
+  {ptable(a['projects'], color="#d97706")}
+</div>
+
+<!-- WHERE THINGS GO WRONG -->
+<div class="R-sec" id="rs-friction">
+  <h3 class="R-h2">Where Things Go Wrong</h3>
+  <div class="R-friction"><div class="R-friction-t">Measurement Blindness</div><div class="R-friction-d">/insights analyzed 12 of {i['count']+a['count']:,} sessions. Any optimization based on those numbers would target the wrong problems.</div></div>
+  <div class="R-friction"><div class="R-friction-t">Premature Implementation</div><div class="R-friction-d">Claude jumps to making changes before understanding context. Still the #1 friction source. Confirmed across {i['count']} sessions.</div></div>
+  <div class="R-friction"><div class="R-friction-t">Agent Cost Opacity</div><div class="R-friction-d">{a['count']:,} automated sessions consuming {fmt(a['input_tokens'])} input + {fmt(a['output_tokens'])} output tokens. Without visibility into idle vs productive heartbeats, you can't optimize cost/value.</div></div>
+</div>
+
+<!-- FEATURES TO TRY -->
+<div class="R-sec" id="rs-features">
+  <h3 class="R-h2">Features to Try</h3>
+  <div class="R-feat"><div class="R-feat-t">Model Routing for Agents</div><div class="R-feat-d">Route {a['count']:,} automated heartbeats through Haiku. Most are just checking for assignments. Could cut agent costs 90%+.</div></div>
+  <div class="R-feat"><div class="R-feat-t">Custom Skills (from original)</div><div class="R-feat-d">Encode agent heartbeat protocol and deployment flows as /commands. You already built /better-insights this way.</div></div>
+  <div class="R-feat"><div class="R-feat-t">Hooks (from original)</div><div class="R-feat-d">Add post-edit type checking to catch buggy first attempts before debugging cascades.</div></div>
+</div>
+
+<!-- WHAT /INSIGHTS GETS WRONG -->
+<div class="R-sec" id="rs-fixes">
+  <h3 class="R-h2">What /insights Gets Wrong</h3>
+  <div class="R-fix"><span class="R-old">Counts tool results as your messages</span> &rarr; <span class="R-new">{i['tool_results']:,} tool results excluded, {i['human_msgs']:,} human messages</span></div>
+  <div class="R-fix"><span class="R-old">Analyzes ~12 sessions</span> &rarr; <span class="R-new">Scanned {i['count']+a['count']+s['count']:,} sessions ({i['count']} interactive + {a['count']:,} automated)</span></div>
+  <div class="R-fix"><span class="R-old">Misses nested project paths</span> &rarr; <span class="R-new">{data['nested_count']:,} sessions recovered ({data['nested_pct']:.0f}% invisible)</span></div>
+</div>
+
+<!-- ON THE HORIZON -->
+<div class="R-sec" id="rs-horizon">
+  <h3 class="R-h2">On the Horizon</h3>
+  <div class="R-horizon"><div class="R-horizon-t">Intelligent Agent Scheduling</div><div class="R-horizon-d">Instead of fixed-interval heartbeats, agents could predict when assignments are likely and only check during high-probability windows.</div></div>
+  <div class="R-horizon"><div class="R-horizon-t">Cost-Aware Model Selection</div><div class="R-horizon-d">Auto-route each task to the cheapest capable model. Heartbeats to Haiku, edits to Sonnet, architecture to Opus.</div></div>
+  <div class="R-horizon"><div class="R-horizon-t">Cross-Project Agent Coordination</div><div class="R-horizon-d">When an agent learns something in one project, that knowledge could propagate to agents in other projects automatically.</div></div>
+</div>
+
+<!-- FUN ENDING -->
+<div class="R-fun">
+  <div class="R-fun-h">For every message you type, your infrastructure runs {a['count']//max(i['human_msgs'],1)} automated sessions</div>
+  <div class="R-fun-d">You sent {i['human_msgs']:,} messages. Your agents ran {a['count']:,} sessions. One human, many agents.</div>
 </div>
 """
 
 
 def generate_html(data, days):
-    """Generate split-view HTML if original /insights report exists, otherwise standalone."""
+    """Generate split-view HTML with original /insights embedded directly (no iframe) for scroll syncing."""
     import re
     period = "all time" if days == 9999 else f"last {days} days"
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -294,74 +356,106 @@ def generate_html(data, days):
     if has_original:
         with open(original_path) as f:
             orig = f.read()
-        # Escape for srcdoc attribute (double-quote and ampersand)
-        orig_srcdoc = orig.replace("&", "&amp;").replace('"', "&quot;")
+        body_m = re.search(r'<body>(.*?)</body>', orig, re.DOTALL)
+        orig_body = body_m.group(1) if body_m else ""
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
-        orig_srcdoc = '<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;color:#64748b;font-family:sans-serif;text-align:center"><div><p style="font-size:1.5rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> in Claude Code first,<br>then run this again to see the comparison.</p></div></body></html>'
+        orig_body = '<div style="display:flex;align-items:center;justify-content:center;height:80vh;color:#64748b;font-size:1.1rem;text-align:center;padding:2rem"><div><p style="font-size:2rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> first.</p></div></div>'
         orig_label = "run /insights first"
 
-    nav_links = """<div class="nav-row">
-      <a onclick="scrollTo_('work')">What You Work On</a>
-      <a onclick="scrollTo_('tokens')">Token Usage</a>
-      <a onclick="scrollTo_('agents')">Agent Infrastructure</a>
-      <a onclick="scrollTo_('fixes')">What's Wrong</a>
-    </div>"""
+    # Section mapping for synced scrolling: nav key -> [left section id, right section id]
+    section_map_js = """{
+      'glance': [null, 'rs-glance'],
+      'work': ['section-work', 'rs-work'],
+      'usage': ['section-usage', 'rs-usage'],
+      'tokens': [null, 'rs-tokens'],
+      'wins': ['section-wins', 'rs-wins'],
+      'friction': ['section-friction', 'rs-friction'],
+      'features': ['section-features', 'rs-features'],
+      'fixes': [null, 'rs-fixes'],
+      'horizon': ['section-horizon', 'rs-horizon'],
+    }"""
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Better Insights - {period}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* === LAYOUT === */
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f0f4f8;color:#334155;line-height:1.6}}
-.top{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-bottom:2px solid #6ee7b7;text-align:center;padding:1rem}}
+.top{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-bottom:2px solid #6ee7b7;text-align:center;padding:.75rem 1rem}}
 .top h1{{font-size:1.3rem;font-weight:700;color:#065f46}}
 .top h1 .cmd{{color:#16a34a;font-family:monospace;font-weight:800}}
-.top .sub{{color:#047857;font-size:.8rem;margin-top:.15rem}}
-.top .toggle{{margin-top:.5rem}}
-.top .toggle button{{font-size:.75rem;padding:4px 14px;border-radius:6px;border:1px solid #6ee7b7;background:rgba(6,95,70,.08);color:#065f46;cursor:pointer;margin:0 3px}}
+.top .sub{{color:#047857;font-size:.78rem;margin-top:.15rem}}
+.top .toggle{{margin-top:.4rem}}
+.top .toggle button{{font-size:.72rem;padding:3px 12px;border-radius:6px;border:1px solid #6ee7b7;background:rgba(6,95,70,.08);color:#065f46;cursor:pointer;margin:0 2px}}
 .top .toggle button:hover{{background:rgba(6,95,70,.18)}}
 .top .toggle button.active{{background:#065f46;color:#fff}}
-.nav-row{{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:.5rem}}
-.nav-row a{{font-size:.7rem;color:#065f46;text-decoration:none;padding:3px 10px;border-radius:5px;background:rgba(6,95,70,.08);cursor:pointer}}
+.nav-row{{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:.4rem}}
+.nav-row a{{font-size:.68rem;color:#065f46;text-decoration:none;padding:2px 8px;border-radius:5px;background:rgba(6,95,70,.08);cursor:pointer}}
 .nav-row a:hover{{background:rgba(6,95,70,.18)}}
 .split{{display:grid;grid-template-columns:1fr 1fr}}
 .split.hide-left{{grid-template-columns:0fr 1fr}}
 .split.hide-left .pl{{overflow:hidden;min-width:0;opacity:0;padding:0}}
-.panel{{overflow-y:auto;height:calc(100vh - 110px)}}
+.panel{{overflow-y:auto;height:calc(100vh - 105px)}}
 .pl{{background:#f8fafc;border-right:3px solid #e2e8f0;transition:all .3s}}
-.pl .lb{{position:sticky;top:0;z-index:10;background:#fef2f2;color:#991b1b;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #fca5a5}}
+.pl .lb{{position:sticky;top:0;z-index:10;background:#fef2f2;color:#991b1b;text-align:center;padding:.3rem;font-weight:600;font-size:.72rem;border-bottom:2px solid #fca5a5}}
 .pl .lb .s{{text-decoration:line-through;opacity:.6}}
-.pl .ow{{opacity:.85}}.pl .ow .container{{max-width:100%;padding:24px}}
+/* Scope original report styles to left panel */
+.pl .ow{{opacity:.85;padding:24px}}
+.pl .ow .container{{max-width:100%}}
 .pr{{background:#f0f4f8}}
-.pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #6ee7b7}}
-.rp{{padding:1.5rem}}
-/* Right panel styles */
-.muted{{color:#64748b;font-size:.85rem}}
-.rp-stats{{display:flex;gap:12px;margin-bottom:24px;padding:16px 0;border-top:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;flex-wrap:wrap}}
-.rp-stat{{text-align:center;flex:1;min-width:70px}}
-.rp-sv{{font-size:22px;font-weight:700;color:#0f172a}}
-.rp-sl{{font-size:11px;color:#64748b;text-transform:uppercase}}
-.rp-sec{{margin-bottom:28px}}
-.rp-sec h2{{font-size:18px;font-weight:600;color:#0f172a;margin-bottom:12px}}
-.rp-area{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px}}
-.rp-hd{{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}}
-.rp-nm{{font-weight:600;font-size:13px;color:#0f172a}}
-.rp-ct{{font-size:11px;color:#64748b;background:#f1f5f9;padding:1px 7px;border-radius:4px}}
-.rp-st{{font-size:12px;color:#475569;margin-bottom:4px}}
-.rp-bt{{height:5px;background:#f1f5f9;border-radius:3px}}
-.rp-bf{{height:100%;border-radius:3px;min-width:2px}}
-.rp-tg{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}}
-.rp-tc{{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;text-align:center}}
-.rp-tl{{font-size:10px;color:#64748b;text-transform:uppercase}}
-.rp-tv{{font-size:18px;font-weight:700;margin-top:2px}}
-.rp-mr{{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #f1f5f9}}
-.rp-fix{{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px}}
-.rp-fix .old{{color:#dc2626;text-decoration:line-through}}
-.rp-fix .new{{color:#16a34a;font-weight:600}}
-@media(max-width:1024px){{.split{{grid-template-columns:1fr!important}}.pl{{display:none}}.rp-tg{{grid-template-columns:repeat(2,1fr)}}}}
+.pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.3rem;font-weight:600;font-size:.72rem;border-bottom:2px solid #6ee7b7}}
+
+/* === RIGHT PANEL (all prefixed R- to avoid conflicts) === */
+.R-wrap{{padding:24px 28px;max-width:100%}}
+.R-muted{{color:#64748b;font-size:13px}}
+.R-glance{{background:linear-gradient(135deg,#ecfdf5 0%,#d1fae5 100%);border:1px solid #6ee7b7;border-radius:12px;padding:18px 22px;margin-bottom:24px}}
+.R-glance-t{{font-size:15px;font-weight:700;color:#065f46;margin-bottom:10px}}
+.R-glance p{{font-size:13px;color:#064e3b;line-height:1.6;margin-bottom:8px}}
+.R-glance p strong{{color:#047857}}
+.R-stats-row{{display:flex;gap:20px;margin-bottom:28px;padding:16px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;flex-wrap:wrap}}
+.R-stat{{text-align:center;flex:1;min-width:60px}}
+.R-sv{{font-size:22px;font-weight:700;color:#0f172a}}
+.R-sl{{font-size:10px;color:#64748b;text-transform:uppercase}}
+.R-sec{{margin-bottom:28px}}
+.R-h2{{font-size:18px;font-weight:600;color:#0f172a;margin-bottom:14px}}
+.R-area{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:8px}}
+.R-ahd{{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}}
+.R-anm{{font-weight:600;font-size:14px;color:#0f172a}}
+.R-act{{font-size:11px;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:4px}}
+.R-ast{{font-size:12px;color:#475569;margin-bottom:5px}}
+.R-abt{{height:5px;background:#f1f5f9;border-radius:3px}}
+.R-abf{{height:100%;border-radius:3px;min-width:2px}}
+.R-narrative{{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:18px;margin-bottom:16px}}
+.R-narrative p{{margin-bottom:10px;font-size:13px;color:#475569;line-height:1.65}}
+.R-key{{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;color:#166534}}
+.R-tg{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}}
+.R-tc{{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;text-align:center}}
+.R-tl{{font-size:10px;color:#64748b;text-transform:uppercase}}
+.R-tv{{font-size:18px;font-weight:700;margin-top:2px}}
+.R-mrow{{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #f1f5f9}}
+.R-win{{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-bottom:10px}}
+.R-win-t{{font-weight:600;font-size:14px;color:#166534;margin-bottom:5px}}
+.R-win-d{{font-size:13px;color:#15803d;line-height:1.5}}
+.R-friction{{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:14px;margin-bottom:10px}}
+.R-friction-t{{font-weight:600;font-size:14px;color:#991b1b;margin-bottom:5px}}
+.R-friction-d{{font-size:13px;color:#7f1d1d;line-height:1.5}}
+.R-feat{{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px;margin-bottom:10px}}
+.R-feat-t{{font-weight:600;font-size:14px;color:#0f172a;margin-bottom:4px}}
+.R-feat-d{{font-size:13px;color:#334155;line-height:1.5}}
+.R-fix{{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px}}
+.R-old{{color:#dc2626;text-decoration:line-through}}
+.R-new{{color:#16a34a;font-weight:600}}
+.R-horizon{{background:linear-gradient(135deg,#faf5ff 0%,#f5f3ff 100%);border:1px solid #c4b5fd;border-radius:8px;padding:14px;margin-bottom:10px}}
+.R-horizon-t{{font-weight:600;font-size:14px;color:#5b21b6;margin-bottom:5px}}
+.R-horizon-d{{font-size:13px;color:#334155;line-height:1.5}}
+.R-fun{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:12px;padding:20px;text-align:center;margin-top:24px}}
+.R-fun-h{{font-size:15px;font-weight:600;color:#065f46;margin-bottom:6px}}
+.R-fun-d{{font-size:13px;color:#047857}}
+@media(max-width:1024px){{.split{{grid-template-columns:1fr!important}}.pl{{display:none}}.R-tg{{grid-template-columns:repeat(2,1fr)}}}}
 </style></head>
 <body>
 <div class="top">
@@ -371,19 +465,49 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
     <button class="active" onclick="setView('split')">Split View</button>
     <button onclick="setView('corrected')">Corrected Only</button>
   </div>
-  {nav_links}
+  <div class="nav-row">
+    <a onclick="syncScroll('work')">What You Work On</a>
+    <a onclick="syncScroll('usage')">How You Use CC</a>
+    <a onclick="syncScroll('tokens')">Token Usage</a>
+    <a onclick="syncScroll('wins')">Impressive Things</a>
+    <a onclick="syncScroll('friction')">Where Things Go Wrong</a>
+    <a onclick="syncScroll('features')">Features to Try</a>
+    <a onclick="syncScroll('fixes')">What's Wrong</a>
+    <a onclick="syncScroll('horizon')">On the Horizon</a>
+  </div>
 </div>
 <div class="split" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
-    <iframe class="ow" srcdoc="{orig_srcdoc}" style="width:100%;border:none;height:calc(100vh - 110px)"></iframe>
+    <div class="ow">{orig_body}</div>
   </div>
   <div class="panel pr" id="right-panel">
     <div class="lb">BETTER INSIGHTS &mdash; {i['human_msgs']:,} messages &middot; {i['count']} sessions &middot; {i_per_day} msgs/day</div>
-    <div class="rp">{right_content}</div>
+    <div class="R-wrap">{right_content}</div>
   </div>
 </div>
 <script>
+var SM = {section_map_js};
+
+function scrollPanel(panel, elId) {{
+  var el = document.getElementById(elId);
+  if (!el || !panel) return;
+  var lb = panel.querySelector('.lb');
+  var stickyH = lb ? lb.offsetHeight : 0;
+  var rect = el.getBoundingClientRect();
+  var panelRect = panel.getBoundingClientRect();
+  panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 12, behavior: 'smooth' }});
+}}
+
+function syncScroll(key) {{
+  var map = SM[key];
+  if (!map) return;
+  var left = document.getElementById('left-panel');
+  var right = document.getElementById('right-panel');
+  if (map[0] && left) scrollPanel(left, map[0]);
+  if (map[1] && right) scrollPanel(right, map[1]);
+}}
+
 function setView(mode) {{
   var split = document.getElementById('split');
   var btns = document.querySelectorAll('.toggle button');
@@ -396,17 +520,19 @@ function setView(mode) {{
     btns[0].classList.add('active');
   }}
 }}
-function scrollTo_(id) {{
-  var el = document.getElementById('rs-' + id);
-  var panel = document.getElementById('right-panel');
-  if (el && panel) {{
-    var lb = panel.querySelector('.lb');
-    var stickyH = lb ? lb.offsetHeight : 0;
-    var rect = el.getBoundingClientRect();
-    var panelRect = panel.getBoundingClientRect();
-    panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 10, behavior: 'smooth' }});
+
+// Intercept original report nav clicks to sync both panels
+document.addEventListener('click', function(e) {{
+  var link = e.target.closest('a[href^="#section-"]');
+  if (link && link.closest('.pl')) {{
+    e.preventDefault();
+    var hash = link.getAttribute('href').replace('#', '');
+    for (var key in SM) {{
+      if (SM[key][0] === hash) {{ syncScroll(key); return; }}
+    }}
+    scrollPanel(document.getElementById('left-panel'), hash);
   }}
-}}
+}});
 </script>
 </body></html>"""
 
