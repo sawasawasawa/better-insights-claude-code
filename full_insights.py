@@ -505,7 +505,7 @@ def generate_html(data, days):
 </div>
 <div class="si-issue"><strong>Message inflation:</strong> /insights counts tool results (API responses sent as "user" role) as your messages. {i['tool_results']:,} tool results are mixed in with your {i['human_msgs']:,} actual messages, inflating the count to {inflated_msgs:,}.</div>
 {"" if data['nested_count'] == 0 else f'<div class="si-issue"><strong>Missing sessions:</strong> {data["nested_count"]:,} sessions ({data["nested_pct"]:.0f}%) are stored in a nested path that /insights does not scan. Only {direct_sessions:,} of {direct_sessions + data["nested_count"]:,} total sessions would be visible.</div>'}
-{"" if not has_agents else f'<div class="si-issue"><strong>No agent separation:</strong> {a["count"]:,} automated agent sessions are mixed in with your {i["count"]} interactive sessions. /insights has no concept of automated vs human-initiated sessions.</div>'}
+{"" if a['count'] < 10 else f'<div class="si-issue"><strong>No agent separation:</strong> {a["count"]:,} automated agent sessions are mixed in with your {i["count"]} interactive sessions. /insights has no concept of automated vs human-initiated sessions.</div>'}
 <div class="si-issue"><strong>Sample size:</strong> /insights deeply analyzes ~12 sessions out of {i['count'] + a['count']:,}. The AI-generated narrative, friction analysis, and recommendations are based on this tiny sample.</div>
 <div class="si-issue"><strong>No token reporting:</strong> /insights does not report input/output tokens, cache usage, or model breakdown. You have no visibility into compute costs.</div>
 </div>"""
