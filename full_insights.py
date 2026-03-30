@@ -294,9 +294,12 @@ def generate_html(data, days):
     if has_original:
         with open(original_path) as f:
             orig = f.read()
+        # Escape for srcdoc attribute (double-quote and ampersand)
+        orig_srcdoc = orig.replace("&", "&amp;").replace('"', "&quot;")
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
+        orig_srcdoc = '<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;color:#64748b;font-family:sans-serif;text-align:center"><div><p style="font-size:1.5rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> in Claude Code first,<br>then run this again to see the comparison.</p></div></body></html>'
         orig_label = "run /insights first"
 
     nav_links = """<div class="nav-row">
@@ -373,7 +376,7 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 <div class="split" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
-    <iframe class="ow" id="orig-frame" srcdoc="" style="width:100%;border:none;height:calc(100vh - 110px)"></iframe>
+    <iframe class="ow" srcdoc="{orig_srcdoc}" style="width:100%;border:none;height:calc(100vh - 110px)"></iframe>
   </div>
   <div class="panel pr" id="right-panel">
     <div class="lb">BETTER INSIGHTS &mdash; {i['human_msgs']:,} messages &middot; {i['count']} sessions &middot; {i_per_day} msgs/day</div>
@@ -403,11 +406,6 @@ function scrollTo_(id) {{
     var panelRect = panel.getBoundingClientRect();
     panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 10, behavior: 'smooth' }});
   }}
-}}
-// Load original report into iframe
-var frame = document.getElementById('orig-frame');
-if (frame) {{
-  frame.src = 'report.html';
 }}
 </script>
 </body></html>"""
