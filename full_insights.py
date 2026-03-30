@@ -314,7 +314,7 @@ def _right_panel_html(data, days):
     if cache_ratio > 10:
         wins.append(("Efficient Cache Usage", f"Cache reads ({fmt(total_cache_read)}) dwarf direct token usage ({fmt(total_input + total_output)}), showing efficient reuse of context."))
     if not wins:
-        wins.append(("Active Claude Code Usage", f"{i['count']} sessions with {i['human_msgs']:,} messages. Your actual usage is significantly higher than what /insights reported."))
+        wins.append(("Active Claude Code Usage", f"{i['count']} sessions with {i['human_msgs']:,} messages ({i_per_day}/day). /insights would show {i['human_msgs'] + i['tool_results']:,} by counting tool results as yours."))
 
     # Friction
     frictions = []
