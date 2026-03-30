@@ -287,7 +287,7 @@ def _right_panel_html(data, days):
     if out_in > 3:
         usage_paras.append(f"Your sessions are <strong>output-heavy</strong> ({out_in:.1f}x more output than input), meaning Claude generates {out_in:.1f}x more text than it reads per interaction.")
     elif out_in < 0.5:
-        usage_paras.append(f"Your sessions are <strong>input-heavy</strong> ({1/out_in:.1f}x more input than output), suggesting context-heavy work like code review or research.")
+        usage_paras.append(f"Your sessions are <strong>input-heavy</strong> ({1/out_in:.1f}x more input than output). Claude reads more than it generates per interaction.")
     if uses_single_model:
         usage_paras.append(f"You use <strong>{top_model}</strong> for {top_model_pct}% of responses.")
     elif len(all_models) > 2:
@@ -299,20 +299,20 @@ def _right_panel_html(data, days):
     elif n_projects > 5:
         key_pattern = f"Active across {n_projects}+ codebases with an average of {msgs_per_session} messages per session."
     else:
-        key_pattern = f"Focused work across {n_projects} project{'s' if n_projects != 1 else ''} with {i['human_msgs']:,} messages. /insights captured a fraction of this."
+        key_pattern = f"{i['human_msgs']:,} messages across {n_projects} project{'s' if n_projects != 1 else ''}. /insights would report {i['human_msgs'] + i['tool_results']:,} by including tool results."
 
     # Impressive Things
     wins = []
     if has_agents and a["count"] > 1000:
-        wins.append(("Large-Scale Agent Infrastructure", f"{a['count']:,} automated sessions across {len(a.get('projects', []))}+ projects. Your agents operate autonomously at significant scale."))
+        wins.append(("Large-Scale Agent Infrastructure", f"{a['count']:,} automated sessions across {len(a.get('projects', []))}+ projects, running {a['count'] // max(days_d, 1):,} sessions/day."))
     if n_projects > 8:
-        wins.append(("Multi-Domain Context Switching", f"{i['count']} sessions spanning {n_projects}+ distinct projects. ~{msgs_per_session} messages per session shows focused, efficient interactions across diverse codebases."))
+        wins.append(("Multi-Domain Context Switching", f"{i['count']} sessions spanning {n_projects}+ distinct projects. ~{msgs_per_session} messages per session across {n_projects} codebases."))
     elif n_projects > 3:
-        wins.append(("Multi-Project Workflow", f"Active across {n_projects}+ projects with {i['count']} sessions. You context-switch between different codebases effectively."))
+        wins.append(("Multi-Project Workflow", f"Active across {n_projects}+ projects with {i['count']} sessions and {i['human_msgs']:,} messages."))
     if i["human_msgs"] > 1000:
-        wins.append(("High-Volume Usage", f"{i['human_msgs']:,} human messages in this period. You're using Claude Code as a primary development tool, not an occasional assistant."))
+        wins.append(("High-Volume Usage", f"{i['human_msgs']:,} human messages ({i_per_day}/day). /insights would report {i['human_msgs'] + i['tool_results']:,} by including tool results."))
     if cache_ratio > 10:
-        wins.append(("Efficient Cache Usage", f"Cache reads ({fmt(total_cache_read)}) dwarf direct token usage ({fmt(total_input + total_output)}), showing efficient reuse of context."))
+        wins.append(("High Cache Reuse", f"Cache reads ({fmt(total_cache_read)}) are {total_cache_read // max(total_input + total_output, 1)}x your direct token usage ({fmt(total_input + total_output)})."))
     if not wins:
         wins.append(("Active Claude Code Usage", f"{i['count']} sessions with {i['human_msgs']:,} messages ({i_per_day}/day). /insights would show {i['human_msgs'] + i['tool_results']:,} by counting tool results as yours."))
 
@@ -334,7 +334,7 @@ def _right_panel_html(data, days):
         features.append(("Agent Effectiveness Tracking", f"Track what percentage of your {a['count']:,} automated sessions find real work vs idle check-ins. Optimize heartbeat frequency based on actual arrival rates."))
     if n_projects > 5:
         top_proj_pct = (i['projects'][0][1]['tokens'] * 100 // max(i['input_tokens'] + i['output_tokens'], 1)) if i['projects'] and (i['input_tokens'] + i['output_tokens']) > 0 else 0
-        features.append(("Token Budget Per Project", f"Your top project uses {top_proj_pct}% of interactive tokens. Setting intentional budgets per project ensures effort matches priorities."))
+        features.append(("Token Budget Per Project", f"Your top project uses {top_proj_pct}% of interactive tokens. The remaining {100 - top_proj_pct}% is spread across {n_projects - 1}+ other projects."))
     if i["count"] > 10:
         features.append(("Post-Edit Validation Hooks", f"With {i['count']} sessions, auto-running type checks after edits would catch recurring bugs before they cascade into debugging."))
 
@@ -343,9 +343,9 @@ def _right_panel_html(data, days):
     if has_agents:
         horizons.append(("Intelligent Agent Scheduling", f"Instead of {a['count']:,} fixed-interval heartbeats, agents could predict when assignments are likely and only check during high-probability windows."))
     if uses_single_model and len(all_models) < 3:
-        horizons.append(("Cost-Aware Model Selection", f"Auto-route tasks to the cheapest capable model. Heartbeats to Haiku, simple edits to Sonnet, complex architecture to {top_model}."))
+        horizons.append(("Cost-Aware Model Selection", f"Currently {top_model_pct}% of responses use {top_model}. Routing lower-complexity tasks to smaller models could reduce costs while maintaining quality where it matters."))
     if n_projects > 5:
-        horizons.append(("Cross-Project Knowledge", f"When an agent learns something in one of your {n_projects}+ projects, that knowledge could propagate to other projects automatically."))
+        horizons.append(("Cross-Project Knowledge", f"You work across {n_projects}+ projects. Patterns learned in one codebase (fixes, configs) could be shared across others to avoid re-discovering them."))
     if not horizons:
         horizons.append(("Better Usage Insights", "As your usage grows, trends will emerge. Running /better-insights regularly builds a picture of how your Claude Code usage evolves over time."))
 
