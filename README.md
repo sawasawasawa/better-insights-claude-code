@@ -1,6 +1,10 @@
-# claude-code-full-insights
+# Better Insights for Claude Code
 
-Comprehensive usage statistics for Claude Code that fixes the undercounting in the built-in `/insights` command.
+**`/insights` told me I send 66 messages a day. The real number is 844.**
+
+The built-in `/insights` command misses up to 88% of your sessions, counts tool results as human messages (inflating counts ~7x), and has no awareness of automated agent infrastructure. This single-file Python script scans everything, separates what you actually typed from what the API generated, and gives you the real picture.
+
+![Better Insights split view - Original vs Corrected](screenshot.png)
 
 ## The Problem
 
