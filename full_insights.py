@@ -582,8 +582,8 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
   <h1><span class="cmd">/better-insights</span> for Claude Code</h1>
   <div class="sub">Original /insights ({orig_label}) vs corrected ({i['human_msgs']:,} messages, {i['count']} sessions, {i_per_day} msgs/day)</div>
   <div class="toggle">
-    <button class="active" onclick="setView('split')">Split View</button>
-    <button onclick="setView('corrected')">Corrected Only</button>
+    <button class="{'active' if has_original else ''}" onclick="setView('split')">Split View</button>
+    <button class="{'' if has_original else 'active'}" onclick="setView('corrected')">Corrected Only</button>
   </div>
   <div class="nav-row">
     <a onclick="syncScroll('work')">What You Work On</a>
@@ -597,7 +597,7 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
     <a onclick="syncScroll('horizon')">On the Horizon</a>
   </div>
 </div>
-<div class="split" id="split">
+<div class="split{' hide-left' if not has_original else ''}" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
     <div class="ow">{orig_body}</div>
