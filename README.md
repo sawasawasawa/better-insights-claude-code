@@ -2,73 +2,22 @@
 
 **`/insights` told me I send 66 messages a day. The real number is 844.**
 
-The built-in `/insights` command misses up to 88% of your sessions, counts tool results as human messages (inflating counts ~7x), and has no awareness of automated agent infrastructure. This single-file Python script scans everything, separates what you actually typed from what the API generated, and gives you the real picture.
+The built-in `/insights` command counts tool results as your messages (inflating counts ~7x), only analyzes ~12 sessions, and misses older sessions stored in a nested path after Claude Code data migrations. This script fixes all of that: scans everything, separates what you typed from what the API generated, reports token usage and model breakdown.
 
 ![Better Insights split view - Original vs Corrected](screenshot.png)
 
-## The Problem
+## Install as a Skill (recommended)
 
-The built-in `/insights` command has several blind spots:
-
-| Issue | /insights | full-insights |
-|---|---|---|
-| Session discovery | Only scans `~/.claude/projects/` | Also scans nested `projects/projects/` |
-| Message counting | Counts tool results as human messages (inflates ~7x) | Separates human messages from tool results |
-| Session analysis | Analyzes ~12 sessions | Scans all sessions |
-| Agent awareness | No concept of automated sessions | Separates interactive vs automated vs subagent |
-| Token usage | Not reported | Full breakdown (input, output, cache read/write) |
-| Model tracking | Not reported | Per-model response counts |
-
-## Quick Start
+Run this once to install as `/full-insights` inside Claude Code:
 
 ```bash
-# Run directly
-python3 full_insights.py
-
-# Last 30 days
-python3 full_insights.py --days=30
-
-# All time
-python3 full_insights.py --all
-
-# JSON output only (no HTML report)
-python3 full_insights.py --json
-
-# Don't auto-open browser
-python3 full_insights.py --no-open
-```
-
-No dependencies. Just Python 3.6+.
-
-## What It Does
-
-1. **Scans all session files** in `~/.claude/projects/` (both direct and nested paths)
-2. **Classifies each session** as:
-   - **Interactive** - you initiated it, human-typed messages
-   - **Automated** - agent heartbeats, queue operations, PAI infrastructure
-   - **Subagent** - spawned by other sessions
-3. **Separates human messages from tool results** - the Claude API sends tool results as "user" role messages, inflating counts
-4. **Extracts token usage** - input, output, cache read, cache write per session
-5. **Generates an HTML report** with cards, project tables, and token breakdown
-6. **Saves JSON data** for further analysis
-
-## Output
-
-- **Terminal**: Summary stats
-- **HTML report**: `~/.claude/usage-data/full-report.html` (auto-opens)
-- **JSON data**: `~/.claude/usage-data/full-insights-data.json`
-
-## Install as Claude Code Skill
-
-If you want to run this as `/full-insights` inside Claude Code:
-
-```bash
-mkdir -p ~/.claude/skills/FullInsights
-cp full_insights.py ~/.claude/skills/FullInsights/
-cat > ~/.claude/skills/FullInsights/SKILL.md << 'EOF'
+SKILL_DIR="${HOME}/.claude/skills/FullInsights"
+mkdir -p "$SKILL_DIR"
+curl -sL https://raw.githubusercontent.com/sawasawasawa/better-insights-claude-code/master/full_insights.py -o "$SKILL_DIR/full_insights.py"
+cat > "$SKILL_DIR/SKILL.md" << 'SKILL'
 ---
 name: full-insights
-description: Generate comprehensive usage statistics across ALL Claude Code sessions. Separates interactive from automated. Fixes /insights undercounting.
+description: Comprehensive Claude Code usage stats. Separates interactive from automated sessions, human messages from tool results. Fixes /insights undercounting.
 user_invocable: true
 ---
 
@@ -77,34 +26,42 @@ user_invocable: true
 ```bash
 python3 ~/.claude/skills/FullInsights/full_insights.py "$@"
 ```
-EOF
+SKILL
+echo "Installed. Run /full-insights in Claude Code."
 ```
 
-## How Sessions Are Classified
+Then type `/full-insights` in any Claude Code session.
 
-| First JSONL line type | Classification |
-|---|---|
-| `type: "queue-operation"` | Automated (agent heartbeat) |
-| `type: "user"` | Interactive (human-initiated) |
-| Path contains `/subagents/` | Subagent |
-| Empty file | Counted as automated |
+## Or run directly
 
-## Why /insights Undercounts
-
-Claude Code stores session data in two locations:
-
-```
-~/.claude/projects/
-  -Users-you-project-name/          # Direct sessions (what /insights sees)
-    session-uuid.jsonl
-  projects/
-    -Users-you-project-name/        # Nested sessions (invisible to /insights)
-      session-uuid.jsonl
+```bash
+python3 full_insights.py              # Last 7 days (default)
+python3 full_insights.py --days=30    # Last 30 days
+python3 full_insights.py --all        # All time
+python3 full_insights.py --json       # JSON only, no HTML
+python3 full_insights.py --no-open    # Don't auto-open browser
 ```
 
-The nested `projects/projects/` path appears to be from older Claude Code versions or migrations. `/insights` only scans the direct path, missing up to 88% of sessions.
+Zero dependencies. Python 3.6+.
 
-Additionally, in the Claude API, tool execution results are sent as `role: "user"` messages. When `/insights` counts "user messages," it includes these tool results, inflating the count by roughly 7x.
+## What it fixes
+
+| Issue | /insights | Better Insights |
+|---|---|---|
+| Message counting | Counts tool results as human messages (~7x inflation) | Separates human messages from tool results |
+| Session coverage | Analyzes ~12 sessions | Scans all sessions |
+| Data migration | Misses sessions in `projects/projects/` after upgrades | Scans both paths |
+| Agent awareness | No concept of automated sessions | Separates interactive vs automated vs subagent |
+| Token usage | Not reported | Input, output, cache read/write breakdown |
+| Model tracking | Not reported | Per-model response counts |
+
+## Why /insights undercounts
+
+**Tool result inflation**: In the Claude API, tool execution results are sent as `role: "user"` messages. `/insights` counts these as messages you typed. In practice, ~85% of "user" messages are actually tool results, inflating your count roughly 7x.
+
+**Missing sessions**: Claude Code data migrations (during version upgrades) move older sessions from `~/.claude/projects/` to `~/.claude/projects/projects/`. The `/insights` command only scans the direct path. If you've been using Claude Code for a while, this can mean 80-90% of your sessions are invisible.
+
+**Session sampling**: `/insights` deeply analyzes only ~12 sessions out of thousands, then extrapolates.
 
 ## License
 
