@@ -1,6 +1,6 @@
 {
   "name": "better-insights-claude-code",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "/insights told me 66 msgs/day. Real number: 844. Fixes undercounting in Claude Code usage stats.",
   "bin": {
     "better-insights": "./cli.mjs"
