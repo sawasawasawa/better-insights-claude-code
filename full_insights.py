@@ -301,15 +301,12 @@ def generate_html(data, days):
         # Scope original styles inside .pl to prevent global override
         raw_styles = style_m.group(1) if style_m else ""
         orig_styles = re.sub(r'(^|\})\s*([a-zA-Z.*#@\[:])', r'\1 .pl .ow \2', raw_styles)
-        # Scripts need brace escaping for f-string
-        raw_scripts = script_m.group(1) if script_m else ""
-        orig_scripts = raw_scripts.replace("{", "{{").replace("}", "}}")
+        # Original scripts stay inside orig_body (left panel), not in our script block
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
         orig_body = '<div style="display:flex;align-items:center;justify-content:center;height:80vh;color:#64748b;font-size:1.1rem;text-align:center;padding:2rem"><div><p style="font-size:2rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> in Claude Code first,<br>then run this again to see the comparison.</p></div></div>'
         orig_styles = ""
-        orig_scripts = ""
         orig_label = "not available"
 
     nav_links = """<div class="nav-row">
@@ -419,7 +416,6 @@ function scrollTo_(id) {{
     panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 10, behavior: 'smooth' }});
   }}
 }}
-{orig_scripts}
 </script>
 </body></html>"""
 
