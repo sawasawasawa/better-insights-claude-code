@@ -9,7 +9,7 @@ The built-in `/insights` counts tool results as your messages (inflating ~7x), o
 ## Install as a skill
 
 ```bash
-npx better-insights-claude-code install
+npx github:sawasawasawa/better-insights-claude-code install
 ```
 
 Then type `/full-insights` in any Claude Code session.
@@ -17,10 +17,10 @@ Then type `/full-insights` in any Claude Code session.
 ## Or run directly
 
 ```bash
-npx better-insights-claude-code              # Last 7 days
-npx better-insights-claude-code --days=30    # Last 30 days
-npx better-insights-claude-code --all        # All time
-npx better-insights-claude-code --json       # JSON only
+npx github:sawasawasawa/better-insights-claude-code              # Last 7 days
+npx github:sawasawasawa/better-insights-claude-code --days=30    # Last 30 days
+npx github:sawasawasawa/better-insights-claude-code --all        # All time
+npx github:sawasawasawa/better-insights-claude-code --json       # JSON only
 ```
 
 ## What it fixes
