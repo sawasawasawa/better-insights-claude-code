@@ -246,12 +246,12 @@ def _right_panel_html(data, days):
   <div class="rp-stat"><div class="rp-sv">{i_per_day}</div><div class="rp-sl">Msgs/Day</div></div>
 </div>
 
-<div class="rp-sec"><h2>What You Work On</h2>
+<div class="rp-sec" id="rs-work"><h2>What You Work On</h2>
 <p class="muted" style="margin-bottom:12px">Based on {i['count']} interactive sessions. Top projects:</p>
 {ptable(i['projects'])}
 </div>
 
-<div class="rp-sec"><h2>Token Usage</h2>
+<div class="rp-sec" id="rs-tokens"><h2>Token Usage</h2>
 <div class="rp-tg">
   <div class="rp-tc"><div class="rp-tl">Input</div><div class="rp-tv" style="color:#2563eb">{fmt(total_input)}</div></div>
   <div class="rp-tc"><div class="rp-tl">Output</div><div class="rp-tv" style="color:#16a34a">{fmt(total_output)}</div></div>
@@ -262,12 +262,12 @@ def _right_panel_html(data, days):
 {mtable()}
 </div>
 
-<div class="rp-sec"><h2>Agent Infrastructure</h2>
+<div class="rp-sec" id="rs-agents"><h2>Agent Infrastructure</h2>
 <p class="muted" style="margin-bottom:12px">{a['count']:,} automated sessions ({a_sess_day}/day). Top projects:</p>
 {ptable(a['projects'], color="#d97706")}
 </div>
 
-<div class="rp-sec"><h2>What /insights Gets Wrong</h2>
+<div class="rp-sec" id="rs-fixes"><h2>What /insights Gets Wrong</h2>
 <div class="rp-fix"><span class="old">Counts tool results as your messages</span> &rarr; <span class="new">{i['tool_results']:,} tool results excluded, only {i['human_msgs']:,} human messages counted</span></div>
 <div class="rp-fix"><span class="old">Analyzes ~12 sessions</span> &rarr; <span class="new">Scanned {i['count'] + a['count'] + s['count']:,} sessions ({i['count']} interactive + {a['count']:,} automated)</span></div>
 <div class="rp-fix"><span class="old">Misses nested project paths</span> &rarr; <span class="new">{data['nested_count']:,} sessions recovered ({data['nested_pct']:.0f}% of total were invisible)</span></div>
@@ -298,9 +298,12 @@ def generate_html(data, days):
         style_m = re.search(r'<style>(.*?)</style>', orig, re.DOTALL)
         script_m = re.search(r'<script>(.*?)</script>', orig, re.DOTALL)
         orig_body = body_m.group(1) if body_m else ""
-        orig_styles = style_m.group(1) if style_m else ""
-        orig_scripts = script_m.group(1) if script_m else ""
-        # Try to extract the stats line from original for the label
+        # Scope original styles inside .pl to prevent global override
+        raw_styles = style_m.group(1) if style_m else ""
+        orig_styles = re.sub(r'(^|\})\s*([a-zA-Z.*#@\[:])', r'\1 .pl .ow \2', raw_styles)
+        # Scripts need brace escaping for f-string
+        raw_scripts = script_m.group(1) if script_m else ""
+        orig_scripts = raw_scripts.replace("{", "{{").replace("}", "}}")
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
@@ -308,6 +311,13 @@ def generate_html(data, days):
         orig_styles = ""
         orig_scripts = ""
         orig_label = "not available"
+
+    nav_links = """<div class="nav-row">
+      <a onclick="scrollTo_('work')">What You Work On</a>
+      <a onclick="scrollTo_('tokens')">Token Usage</a>
+      <a onclick="scrollTo_('agents')">Agent Infrastructure</a>
+      <a onclick="scrollTo_('fixes')">What's Wrong</a>
+    </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -318,15 +328,19 @@ def generate_html(data, days):
 body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#f0f4f8;color:#334155;line-height:1.6}}
 .top{{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border-bottom:2px solid #6ee7b7;text-align:center;padding:1rem}}
 .top h1{{font-size:1.3rem;font-weight:700;color:#065f46}}
+.top h1 .cmd{{color:#16a34a;font-family:monospace;font-weight:800}}
 .top .sub{{color:#047857;font-size:.8rem;margin-top:.15rem}}
 .top .toggle{{margin-top:.5rem}}
 .top .toggle button{{font-size:.75rem;padding:4px 14px;border-radius:6px;border:1px solid #6ee7b7;background:rgba(6,95,70,.08);color:#065f46;cursor:pointer;margin:0 3px}}
 .top .toggle button:hover{{background:rgba(6,95,70,.18)}}
 .top .toggle button.active{{background:#065f46;color:#fff}}
+.nav-row{{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:.5rem}}
+.nav-row a{{font-size:.7rem;color:#065f46;text-decoration:none;padding:3px 10px;border-radius:5px;background:rgba(6,95,70,.08);cursor:pointer}}
+.nav-row a:hover{{background:rgba(6,95,70,.18)}}
 .split{{display:grid;grid-template-columns:1fr 1fr}}
 .split.hide-left{{grid-template-columns:0fr 1fr}}
 .split.hide-left .pl{{overflow:hidden;min-width:0;opacity:0;padding:0}}
-.panel{{overflow-y:auto;height:calc(100vh - 80px)}}
+.panel{{overflow-y:auto;height:calc(100vh - 110px)}}
 .pl{{background:#f8fafc;border-right:3px solid #e2e8f0;transition:all .3s}}
 .pl .lb{{position:sticky;top:0;z-index:10;background:#fef2f2;color:#991b1b;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #fca5a5}}
 .pl .lb .s{{text-decoration:line-through;opacity:.6}}
@@ -334,7 +348,9 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 .pr{{background:#f0f4f8}}
 .pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #6ee7b7}}
 .rp{{padding:1.5rem}}
+/* Original report styles scoped to left panel */
 {orig_styles}
+/* Right panel styles */
 .muted{{color:#64748b;font-size:.85rem}}
 .rp-stats{{display:flex;gap:12px;margin-bottom:24px;padding:16px 0;border-top:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;flex-wrap:wrap}}
 .rp-stat{{text-align:center;flex:1;min-width:70px}}
@@ -361,19 +377,20 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 </style></head>
 <body>
 <div class="top">
-  <h1>Better Insights for Claude Code</h1>
+  <h1><span class="cmd">/better-insights</span> for Claude Code</h1>
   <div class="sub">Original /insights ({orig_label}) vs corrected ({i['human_msgs']:,} messages, {i['count']} sessions, {i_per_day} msgs/day)</div>
   <div class="toggle">
     <button class="active" onclick="setView('split')">Split View</button>
     <button onclick="setView('corrected')">Corrected Only</button>
   </div>
+  {nav_links}
 </div>
 <div class="split" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
     <div class="ow">{orig_body}</div>
   </div>
-  <div class="panel pr">
+  <div class="panel pr" id="right-panel">
     <div class="lb">BETTER INSIGHTS &mdash; {i['human_msgs']:,} messages &middot; {i['count']} sessions &middot; {i_per_day} msgs/day</div>
     <div class="rp">{right_content}</div>
   </div>
@@ -389,6 +406,17 @@ function setView(mode) {{
   }} else {{
     split.classList.remove('hide-left');
     btns[0].classList.add('active');
+  }}
+}}
+function scrollTo_(id) {{
+  var el = document.getElementById('rs-' + id);
+  var panel = document.getElementById('right-panel');
+  if (el && panel) {{
+    var lb = panel.querySelector('.lb');
+    var stickyH = lb ? lb.offsetHeight : 0;
+    var rect = el.getBoundingClientRect();
+    var panelRect = panel.getBoundingClientRect();
+    panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 10, behavior: 'smooth' }});
   }}
 }}
 {orig_scripts}
