@@ -198,7 +198,7 @@ def fmt(n):
 
 
 def _right_panel_html(data, days):
-    """Generate the corrected right panel content with ALL sections."""
+    """Generate the corrected right panel content. All narrative is data-driven."""
     i = data["interactive"]
     a = data["automated"]
     s = data["subagent"]
@@ -213,6 +213,19 @@ def _right_panel_html(data, days):
     for bucket in [i, a, s]:
         for m, c in bucket["models"].items():
             all_models[m] += c
+
+    # Derived facts for conditional narrative
+    has_agents = a["count"] > 10
+    agent_ratio = a["count"] / max(i["count"], 1)
+    n_projects = len(i.get("projects", []))
+    msgs_per_session = i["human_msgs"] // max(i["count"], 1)
+    out_in = i["output_tokens"] / max(i["input_tokens"], 1)
+    top_model = max(all_models, key=all_models.get) if all_models else "unknown"
+    top_model_pct = all_models.get(top_model, 0) * 100 // max(sum(all_models.values()), 1)
+    uses_single_model = top_model_pct > 90
+    cache_ratio = total_cache_read / max(total_input + total_output, 1)
+    i_per_day = f"{i['human_msgs'] / days_d:,.0f}" if days != 9999 else "N/A"
+    a_sess_day = f"{a['count'] / days_d:,.0f}" if days != 9999 else "N/A"
 
     def ptable(projects, n=12, color="#2563eb", compact=False):
         if not projects: return ""
@@ -232,17 +245,116 @@ def _right_panel_html(data, days):
             rows += f'<div class="R-mrow"><span>{html_mod.escape(model)}</span><span class="R-muted">{count:,}</span></div>'
         return rows
 
-    i_per_day = f"{i['human_msgs'] / days_d:,.0f}" if days != 9999 else "N/A"
-    a_sess_day = f"{a['count'] / days_d:,.0f}" if days != 9999 else "N/A"
-    out_in = i['output_tokens'] / max(i['input_tokens'], 1)
+    # === BUILD CONDITIONAL NARRATIVE BLOCKS ===
+
+    # At a Glance: What's working
+    if has_agents and agent_ratio > 50:
+        glance_working = f"You're running a personal AI infrastructure: {i['count']} interactive sessions backed by {a['count']:,} automated agent sessions across {n_projects}+ projects. Your agents outnumber your manual sessions {agent_ratio:.0f}:1."
+    elif has_agents:
+        glance_working = f"You're using Claude Code across {n_projects}+ projects with {i['count']} interactive sessions and {a['count']:,} automated sessions running alongside. You average ~{msgs_per_session} messages per session."
+    elif n_projects > 5:
+        glance_working = f"You're active across {n_projects}+ projects with {i['count']} sessions and {i['human_msgs']:,} messages. You average ~{msgs_per_session} messages per session, context-switching across diverse codebases."
+    else:
+        glance_working = f"You've had {i['count']} sessions with {i['human_msgs']:,} messages across {n_projects} project{'s' if n_projects != 1 else ''}. You average ~{msgs_per_session} messages per session."
+
+    # At a Glance: What's hindering
+    glance_hindering_parts = []
+    if i["tool_results"] > i["human_msgs"] * 2:
+        glance_hindering_parts.append(f"/insights counted {i['tool_results']:,} tool results as your messages, inflating your count {i['tool_results'] // max(i['human_msgs'], 1)}x")
+    if data["nested_count"] > 0:
+        glance_hindering_parts.append(f"{data['nested_count']:,} sessions ({data['nested_pct']:.0f}%) were invisible to /insights due to data migration paths")
+    if not glance_hindering_parts:
+        glance_hindering_parts.append("/insights only analyzed ~12 sessions, missing the full picture")
+    glance_hindering = ". ".join(glance_hindering_parts) + "."
+
+    # At a Glance: What to try
+    glance_try_parts = []
+    if has_agents and uses_single_model and "opus" in top_model.lower():
+        glance_try_parts.append(f"Route your {a['count']:,} automated sessions through Haiku instead of Opus")
+    if n_projects > 5:
+        glance_try_parts.append("Set token budgets per project to allocate resources intentionally")
+    if has_agents:
+        glance_try_parts.append("Track which agent sessions find real work vs idle heartbeats")
+    if not glance_try_parts:
+        glance_try_parts.append("Review your project token allocation to ensure effort matches priorities")
+    glance_try = ". ".join(glance_try_parts) + "."
+
+    # How You Use CC narrative
+    usage_paras = []
+    usage_paras.append(f"With {i['count']} interactive sessions generating {i['human_msgs']:,} human messages ({i_per_day}/day), you average ~{msgs_per_session} messages per session.")
+    if has_agents:
+        usage_paras.append(f"Behind your interactive work, <strong>{a['count']:,} automated sessions</strong> run continuously ({a_sess_day}/day), generating {agent_ratio:.0f}x more sessions than you do manually.")
+    if out_in > 3:
+        usage_paras.append(f"Your sessions are <strong>output-heavy</strong> ({out_in:.1f}x more output than input), meaning Claude generates far more than it reads when you're driving. This is typical of creative building work.")
+    elif out_in < 0.5:
+        usage_paras.append(f"Your sessions are <strong>input-heavy</strong> ({1/out_in:.1f}x more input than output), suggesting context-heavy work like code review or research.")
+    if uses_single_model:
+        usage_paras.append(f"You use <strong>{top_model}</strong> for {top_model_pct}% of responses.")
+    elif len(all_models) > 2:
+        usage_paras.append(f"You use {len(all_models)} different models, with {top_model} handling {top_model_pct}% of responses.")
+
+    # Key pattern
+    if has_agents and agent_ratio > 10:
+        key_pattern = f"One human orchestrating an AI workforce. For every message you type, your infrastructure runs {a['count'] // max(i['human_msgs'], 1)} automated sessions."
+    elif n_projects > 5:
+        key_pattern = f"A multi-project power user running {n_projects}+ codebases with focused, purposeful sessions averaging {msgs_per_session} messages each."
+    else:
+        key_pattern = f"Focused work across {n_projects} project{'s' if n_projects != 1 else ''} with {i['human_msgs']:,} messages. /insights captured a fraction of this."
+
+    # Impressive Things
+    wins = []
+    if has_agents and a["count"] > 1000:
+        wins.append(("Large-Scale Agent Infrastructure", f"{a['count']:,} automated sessions across {len(a.get('projects', []))}+ projects. Your agents operate autonomously at significant scale."))
+    if n_projects > 8:
+        wins.append(("Multi-Domain Context Switching", f"{i['count']} sessions spanning {n_projects}+ distinct projects. ~{msgs_per_session} messages per session shows focused, efficient interactions across diverse codebases."))
+    elif n_projects > 3:
+        wins.append(("Multi-Project Workflow", f"Active across {n_projects}+ projects with {i['count']} sessions. You context-switch between different codebases effectively."))
+    if i["human_msgs"] > 1000:
+        wins.append(("High-Volume Usage", f"{i['human_msgs']:,} human messages in this period. You're using Claude Code as a primary development tool, not an occasional assistant."))
+    if cache_ratio > 10:
+        wins.append(("Efficient Cache Usage", f"Cache reads ({fmt(total_cache_read)}) dwarf direct token usage ({fmt(total_input + total_output)}), showing efficient reuse of context."))
+    if not wins:
+        wins.append(("Active Claude Code Usage", f"{i['count']} sessions with {i['human_msgs']:,} messages. Your actual usage is significantly higher than what /insights reported."))
+
+    # Friction
+    frictions = []
+    if i["tool_results"] > i["human_msgs"] * 3:
+        frictions.append(("Message Count Inflation", f"/insights counted {i['tool_results']:,} tool results as your messages. Your actual human message count is {i['human_msgs']:,}, a {i['tool_results'] // max(i['human_msgs'], 1)}x difference."))
+    if data["nested_count"] > 100:
+        frictions.append(("Missing Session Data", f"{data['nested_count']:,} sessions ({data['nested_pct']:.0f}% of total) were in a nested path invisible to /insights. These are likely from before a Claude Code data migration."))
+    if has_agents and uses_single_model and "opus" in top_model.lower():
+        frictions.append(("Agent Cost Opacity", f"{a['count']:,} automated sessions consuming {fmt(a['input_tokens'])} input + {fmt(a['output_tokens'])} output tokens, almost all on {top_model}. Many of these may be idle heartbeats that don't need the most capable model."))
+    frictions.append(("Limited /insights Analysis", f"/insights deeply analyzed ~12 sessions out of {i['count'] + a['count']:,}. Any insights based on that sample may not represent your actual usage patterns."))
+
+    # Features to try
+    features = []
+    if has_agents and uses_single_model and "opus" in top_model.lower():
+        features.append(("Model Routing for Agents", f"Route your {a['count']:,} automated sessions through a smaller model. Most agent heartbeats just check for assignments and don't need {top_model}-level reasoning."))
+    if has_agents:
+        features.append(("Agent Effectiveness Tracking", f"Track what percentage of your {a['count']:,} automated sessions find real work vs idle check-ins. Optimize heartbeat frequency based on actual arrival rates."))
+    if n_projects > 5:
+        top_proj_pct = (i['projects'][0][1]['tokens'] * 100 // max(i['input_tokens'] + i['output_tokens'], 1)) if i['projects'] and (i['input_tokens'] + i['output_tokens']) > 0 else 0
+        features.append(("Token Budget Per Project", f"Your top project uses {top_proj_pct}% of interactive tokens. Setting intentional budgets per project ensures effort matches priorities."))
+    features.append(("Post-Edit Validation Hooks", "Auto-run type checks or lint after edits to catch bugs before they cascade into debugging sessions."))
+
+    # Horizon
+    horizons = []
+    if has_agents:
+        horizons.append(("Intelligent Agent Scheduling", f"Instead of {a['count']:,} fixed-interval heartbeats, agents could predict when assignments are likely and only check during high-probability windows."))
+    if uses_single_model and len(all_models) < 3:
+        horizons.append(("Cost-Aware Model Selection", f"Auto-route tasks to the cheapest capable model. Heartbeats to Haiku, simple edits to Sonnet, complex architecture to {top_model}."))
+    if n_projects > 5:
+        horizons.append(("Cross-Project Knowledge", f"When an agent learns something in one of your {n_projects}+ projects, that knowledge could propagate to other projects automatically."))
+    if not horizons:
+        horizons.append(("Better Usage Insights", "As your usage grows, trends will emerge. Running /better-insights regularly builds a picture of how your Claude Code usage evolves over time."))
 
     return f"""
 <!-- AT A GLANCE -->
 <div class="R-glance" id="rs-glance">
   <div class="R-glance-t">At a Glance (Corrected)</div>
-  <p><strong>What's working:</strong> You're operating a personal AI infrastructure with {i['count']} interactive sessions and {a['count']:,} automated agent sessions in this period across {len(i.get('projects', []))}+ projects. You average ~{i['human_msgs']//max(i['count'],1)} messages per session, focused and purposeful.</p>
-  <p><strong>What's hindering you:</strong> /insights analyzed 12 of {i['count']+a['count']:,} sessions. The original friction analysis (premature implementation, buggy first attempts) still applies, but the deeper issue is measurement blindness.</p>
-  <p><strong>What to try:</strong> Route automated heartbeats through Haiku instead of Opus. Build agent effectiveness metrics. Use token budgets per project.</p>
+  <p><strong>What's working:</strong> {glance_working}</p>
+  <p><strong>What's hindering you:</strong> {glance_hindering}</p>
+  <p><strong>What to try:</strong> {glance_try}</p>
 </div>
 
 <!-- STATS -->
@@ -268,11 +380,8 @@ def _right_panel_html(data, days):
 <div class="R-sec" id="rs-usage">
   <h3 class="R-h2">How You Use Claude Code</h3>
   <div class="R-narrative">
-    <p>You're running Claude Code as a <strong>full-stack AI infrastructure layer</strong> across a remarkably diverse set of projects. With {i['count']} interactive sessions generating {i['human_msgs']:,} human messages, you average {i_per_day} messages per day and ~{i['human_msgs']//max(i['count'],1)} per session.</p>
-    <p>Behind your interactive work, <strong>{a['count']:,} automated agent sessions</strong> run continuously ({a_sess_day}/day). Your infrastructure generates {a['count']//max(i['count'],1)}x more sessions than you do manually. This is not "using a coding assistant". This is operating an AI-augmented development organization.</p>
-    <p>Your interactive sessions are <strong>output-heavy</strong> ({out_in:.1f}x more output than input), meaning Claude generates far more than it reads when you're driving. This is typical of creative building work. You use <strong>Opus 4.6 almost exclusively</strong> ({i['models'].get('claude-opus-4-6', 0):,} of {sum(i['models'].values()):,} responses), running the most capable model for virtually everything.</p>
-    <p>Your multi-tasking pattern packs several objectives into single sessions. You iterate quickly and redirect Claude when it goes off track. Despite friction, you rate outcomes highly when work gets done, suggesting you value results over smoothness.</p>
-    <div class="R-key"><strong>Key pattern:</strong> One human orchestrating an AI workforce. For every message you type, your infrastructure runs {a['count']//max(i['human_msgs'],1)} automated sessions. You're the conductor, not the orchestra.</div>
+    {"".join(f"<p>{p}</p>" for p in usage_paras)}
+    <div class="R-key"><strong>Key pattern:</strong> {key_pattern}</div>
   </div>
 </div>
 
@@ -295,11 +404,7 @@ def _right_panel_html(data, days):
 <!-- IMPRESSIVE THINGS -->
 <div class="R-sec" id="rs-wins">
   <h3 class="R-h2">Impressive Things You Did</h3>
-  <p class="R-muted" style="margin-bottom:12px">With {i['count']} sessions across {len(i.get('projects',[]))}+ projects in this period, you're operating at a scale the original report couldn't see.</p>
-  <div class="R-win"><div class="R-win-t">Personal AI Infrastructure at Scale</div><div class="R-win-d">{a['count']:,} automated agent sessions across {len(a.get('projects', []))}+ projects. This isn't "using Claude Code." You're operating an AI-augmented development organization where agents check for assignments, evaluate ventures, and manage infrastructure autonomously.</div></div>
-  <div class="R-win"><div class="R-win-t">Multi-Domain Context Mastery</div><div class="R-win-d">{i['count']} sessions spanning {len(i.get('projects',[]))}+ projects. Each with distinct codebases, tech stacks, and contexts. ~{i['human_msgs']//max(i['count'],1)} messages per session shows you're not fumbling. Each session is a focused work unit. Your ability to context-switch across these domains while shipping real output is remarkable.</div></div>
-  <div class="R-win"><div class="R-win-t">Autonomous Multi-Agent Companies</div><div class="R-win-d">Top automated projects run thousands of heartbeat sessions each. You've built simulated companies with multiple AI personas (CEO, CTO, agents) operating on their own cycles, checking for assignments, evaluating opportunities, and executing work without human intervention.</div></div>
-  <div class="R-win"><div class="R-win-t">Always-On AI Layer</div><div class="R-win-d">Your setup runs Claude around the clock. While you sleep, agents continue monitoring, checking, and processing. You've pushed Claude Code from a coding assistant into a persistent infrastructure layer that augments everything you do.</div></div>
+  {"".join(f'<div class="R-win"><div class="R-win-t">{t}</div><div class="R-win-d">{d}</div></div>' for t, d in wins)}
 </div>
 
 <!-- AGENT INFRASTRUCTURE -->
@@ -312,59 +417,34 @@ def _right_panel_html(data, days):
 <!-- WHERE THINGS GO WRONG -->
 <div class="R-sec" id="rs-friction">
   <h3 class="R-h2">Where Things Go Wrong</h3>
-  <p class="R-muted" style="margin-bottom:12px">The original friction analysis still applies. With full data ({i['count']} sessions vs 12), the patterns are confirmed and we can add new ones:</p>
-  <div class="R-friction"><div class="R-friction-t">Measurement Blindness</div><div class="R-friction-d">/insights analyzed 12 of {i['count']+a['count']:,} sessions and reported 198 of {i['human_msgs']:,} messages. Any optimization based on those numbers would target the wrong problems. Accurate observability is prerequisite to improvement. This tool exists because the built-in reporting is fundamentally blind to how you work.</div></div>
-  <div class="R-friction"><div class="R-friction-t">Premature Implementation Without Planning</div><div class="R-friction-d">Claude repeatedly jumps to making changes or searching in wrong locations before properly understanding the task context. This remains the #1 friction source across {i['count']} sessions. You could mitigate this by explicitly asking Claude to outline its plan before executing, which you've successfully done in sessions where you redirected it.</div></div>
-  <div class="R-friction"><div class="R-friction-t">Buggy First Attempts Requiring Iteration</div><div class="R-friction-d">Code produced on the first pass frequently has bugs: wrong paths, sizing mismatches, incorrect tool names, broken imports. This requires multiple debugging rounds and costs real time. The pattern is confirmed across the broader dataset, not just the 12 sessions /insights analyzed.</div></div>
-  <div class="R-friction"><div class="R-friction-t">Incorrect Environment Assumptions</div><div class="R-friction-d">Claude frequently assumes wrong file locations, deployment targets, or platform constraints, only discovering the correct approach after failed attempts. Front-loading key constraints (platform limitations, project structure) at session start would cut wasted cycles.</div></div>
-  <div class="R-friction"><div class="R-friction-t">Agent Cost Opacity</div><div class="R-friction-d">{a['count']:,} automated sessions consuming {fmt(a['input_tokens'])} input + {fmt(a['output_tokens'])} output tokens, almost all on Opus. Without visibility into what those agents actually accomplish vs idle heartbeats, you can't optimize the cost/value ratio of your infrastructure.</div></div>
+  {"".join(f'<div class="R-friction"><div class="R-friction-t">{t}</div><div class="R-friction-d">{d}</div></div>' for t, d in frictions)}
 </div>
 
 <!-- FEATURES TO TRY -->
 <div class="R-sec" id="rs-features">
   <h3 class="R-h2">Features to Try</h3>
-  <p class="R-muted" style="margin-bottom:12px">The original suggestions (Custom Skills, Hooks, Headless Mode) are still valid. With the full picture, we add data-driven recommendations:</p>
-  <div class="R-feat"><div class="R-feat-t">Model Routing for Agents</div><div class="R-feat-d"><strong>Why for you:</strong> {a['count']:,} automated sessions run on Opus. Most are just checking for assignments and finding nothing. Routing idle heartbeats through Haiku could cut agent token costs by 90%+ without affecting the quality of your interactive work.</div></div>
-  <div class="R-feat"><div class="R-feat-t">Custom Skills</div><div class="R-feat-d"><strong>Why for you:</strong> You run automated agent heartbeats, daemon setups, and multi-step deployment flows repeatedly. A /heartbeat or /deploy skill would eliminate the repeated setup friction. You already built /better-insights this way, proving the pattern works.</div></div>
-  <div class="R-feat"><div class="R-feat-t">Hooks</div><div class="R-feat-d"><strong>Why for you:</strong> With buggy first attempts as a top friction source, auto-running type checks or lint after edits would catch issues like broken import paths and sizing bugs before they cascade into debugging sessions. Add a postEdit hook that runs <code>npx tsc --noEmit</code>.</div></div>
-  <div class="R-feat"><div class="R-feat-t">Headless Mode</div><div class="R-feat-d"><strong>Why for you:</strong> You already run automated heartbeat agents and daemon scripts. Headless mode with proper --allowedTools would stabilize your agent flows instead of the fragile manual setup that causes repeated friction with tool names and permission resets.</div></div>
-  <div class="R-feat"><div class="R-feat-t">Agent Effectiveness Dashboard</div><div class="R-feat-d"><strong>Why for you:</strong> Track what percentage of your {a['count']:,} automated sessions actually find work vs idle check-ins. Optimize heartbeat frequency based on actual assignment arrival rates rather than fixed intervals.</div></div>
-  <div class="R-feat"><div class="R-feat-t">Token Budget Per Project</div><div class="R-feat-d"><strong>Why for you:</strong> With {fmt(total_input + total_output)} tokens flowing through your infrastructure, set intentional token budgets per project. Your top project uses {fmt(i['projects'][0][1]['tokens']) if i['projects'] else '0'} tokens ({i['projects'][0][1]['tokens']*100//(i['input_tokens']+i['output_tokens']) if i['projects'] and (i['input_tokens']+i['output_tokens']) > 0 else 0}% of interactive total). Is that the right allocation?</div></div>
-</div>
-
-<!-- USAGE PATTERNS -->
-<div class="R-sec" id="rs-patterns">
-  <h3 class="R-h2">New Ways to Use Claude Code</h3>
-  <div class="R-feat" style="background:#f0f9ff;border-color:#7dd3fc"><div class="R-feat-t">Plan-before-execute discipline</div><div class="R-feat-d">Explicitly tell Claude to present a plan and wait for approval before any file changes. In multiple sessions, Claude jumped straight to implementation when you wanted planning first. Adding a 'plan first' instruction prevents this.</div></div>
-  <div class="R-feat" style="background:#f0f9ff;border-color:#7dd3fc"><div class="R-feat-t">Narrow the search scope upfront</div><div class="R-feat-d">Tell Claude exactly where to look for context before it starts searching broadly. Your projects span multiple repos and tools. Giving Claude a specific starting point saves significant time in your complex multi-project setup.</div></div>
-  <div class="R-feat" style="background:#f0f9ff;border-color:#7dd3fc"><div class="R-feat-t">Verify deployment targets before executing</div><div class="R-feat-d">Add a verification step before any deployment or CLI auth operation. Confirm auth, project name, and environment variables before proceeding. Multiple sessions hit friction from wrong project targets.</div></div>
+  {"".join(f'<div class="R-feat"><div class="R-feat-t">{t}</div><div class="R-feat-d">{d}</div></div>' for t, d in features)}
 </div>
 
 <!-- WHAT /INSIGHTS GETS WRONG -->
 <div class="R-sec" id="rs-fixes">
   <h3 class="R-h2">What /insights Gets Wrong</h3>
-  <div class="R-fix"><span class="R-old">Counts tool results as your messages (~7x inflation)</span> &rarr; <span class="R-new">{i['tool_results']:,} tool results excluded. Only {i['human_msgs']:,} actual human messages counted.</span></div>
-  <div class="R-fix"><span class="R-old">Analyzes ~12 of {i['count']+a['count']:,} sessions</span> &rarr; <span class="R-new">Full scan: {i['count']} interactive + {a['count']:,} automated + {s['count']:,} subagent sessions analyzed.</span></div>
-  <div class="R-fix"><span class="R-old">Misses sessions after data migrations</span> &rarr; <span class="R-new">{data['nested_count']:,} sessions recovered from nested path ({data['nested_pct']:.0f}% of total were invisible to /insights).</span></div>
-  <div class="R-fix"><span class="R-old">No token usage reporting</span> &rarr; <span class="R-new">Full breakdown: {fmt(total_input)} input, {fmt(total_output)} output, {fmt(total_cache_read)} cache read, per-model counts.</span></div>
-  <div class="R-fix"><span class="R-old">No agent awareness</span> &rarr; <span class="R-new">Sessions classified as interactive ({i['count']}), automated ({a['count']:,}), or subagent ({s['count']:,}). Infrastructure load visible.</span></div>
+  <div class="R-fix"><span class="R-old">Counts tool results as your messages</span> &rarr; <span class="R-new">{i['tool_results']:,} tool results excluded. {i['human_msgs']:,} actual human messages.</span></div>
+  <div class="R-fix"><span class="R-old">Analyzes ~12 sessions</span> &rarr; <span class="R-new">Scanned {i['count'] + a['count'] + s['count']:,} total sessions.</span></div>
+  {"" if data['nested_count'] == 0 else f'<div class="R-fix"><span class="R-old">Misses migrated sessions</span> &rarr; <span class="R-new">{data["nested_count"]:,} sessions recovered ({data["nested_pct"]:.0f}% were invisible).</span></div>'}
+  {"" if not has_agents else f'<div class="R-fix"><span class="R-old">No agent awareness</span> &rarr; <span class="R-new">{i["count"]} interactive + {a["count"]:,} automated separated.</span></div>'}
 </div>
 
 <!-- ON THE HORIZON -->
 <div class="R-sec" id="rs-horizon">
   <h3 class="R-h2">On the Horizon</h3>
-  <p class="R-muted" style="margin-bottom:12px">Your usage reveals a power user pushing Claude toward autonomous agent loops and persistent daemons. The biggest gains now come from reducing friction in always-on workflows.</p>
-  <div class="R-horizon"><div class="R-horizon-t">Self-Healing Persistent Agent Daemons</div><div class="R-horizon-d">Imagine a daemon that automatically detects tool naming mismatches, permission resets, and config drift, then fixes itself without human intervention. With structured error recovery and health checks already in your heartbeat pattern, you're one abstraction layer away from truly autonomous persistent agents.</div></div>
-  <div class="R-horizon"><div class="R-horizon-t">Intelligent Agent Scheduling</div><div class="R-horizon-d">Instead of {a['count']:,} fixed-interval heartbeats per week, agents could predict when assignments are likely based on your interactive patterns and only check during high-probability windows. This could reduce agent token costs by 50-80% while maintaining responsiveness.</div></div>
-  <div class="R-horizon"><div class="R-horizon-t">Cost-Aware Model Selection</div><div class="R-horizon-d">Future infrastructure could automatically route each task to the cheapest model that can handle it. Heartbeats to Haiku ({fmt(a['input_tokens']+a['output_tokens'])} tokens/week saved), simple edits to Sonnet, complex architecture to Opus. Currently everything goes to Opus.</div></div>
-  <div class="R-horizon"><div class="R-horizon-t">Cross-Project Agent Coordination</div><div class="R-horizon-d">Your {len(i.get('projects',[]))}+ projects share patterns. When an agent learns something in one project (like a deployment fix or a configuration pattern), that knowledge could propagate to agents in other projects automatically, creating a compound learning effect.</div></div>
-  <div class="R-horizon"><div class="R-horizon-t">Parallel Multi-Project Agents</div><div class="R-horizon-d">Instead of sequential check-ins, spawn parallel Claude agents that simultaneously work across your projects, each iterating against their own test suites and merging results. Your current workflow could compress dramatically with coordinated parallelism.</div></div>
+  {"".join(f'<div class="R-horizon"><div class="R-horizon-t">{t}</div><div class="R-horizon-d">{d}</div></div>' for t, d in horizons)}
 </div>
 
 <!-- FUN ENDING -->
 <div class="R-fun">
-  <div class="R-fun-h">For every message you type, your infrastructure runs {a['count']//max(i['human_msgs'],1)} automated sessions</div>
-  <div class="R-fun-d">You sent {i['human_msgs']:,} messages. Your agents ran {a['count']:,} sessions. That's one human orchestrating an AI workforce that never sleeps.</div>
+  <div class="R-fun-h">{i['human_msgs']:,} real messages vs {i['human_msgs'] + i['tool_results']:,} that /insights counted</div>
+  <div class="R-fun-d">{"Your agents ran " + str(a['count']) + " sessions on top of that." if has_agents else "Now you know the real numbers."}</div>
 </div>
 """
 
