@@ -335,7 +335,8 @@ def _right_panel_html(data, days):
     if n_projects > 5:
         top_proj_pct = (i['projects'][0][1]['tokens'] * 100 // max(i['input_tokens'] + i['output_tokens'], 1)) if i['projects'] and (i['input_tokens'] + i['output_tokens']) > 0 else 0
         features.append(("Token Budget Per Project", f"Your top project uses {top_proj_pct}% of interactive tokens. Setting intentional budgets per project ensures effort matches priorities."))
-    features.append(("Post-Edit Validation Hooks", "Auto-run type checks or lint after edits to catch bugs before they cascade into debugging sessions."))
+    if i["count"] > 10:
+        features.append(("Post-Edit Validation Hooks", f"With {i['count']} sessions, auto-running type checks after edits would catch recurring bugs before they cascade into debugging."))
 
     # Horizon
     horizons = []
