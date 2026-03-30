@@ -294,20 +294,10 @@ def generate_html(data, days):
     if has_original:
         with open(original_path) as f:
             orig = f.read()
-        body_m = re.search(r'<body>(.*?)</body>', orig, re.DOTALL)
-        style_m = re.search(r'<style>(.*?)</style>', orig, re.DOTALL)
-        script_m = re.search(r'<script>(.*?)</script>', orig, re.DOTALL)
-        orig_body = body_m.group(1) if body_m else ""
-        # Scope original styles inside .pl to prevent global override
-        raw_styles = style_m.group(1) if style_m else ""
-        orig_styles = re.sub(r'(^|\})\s*([a-zA-Z.*#@\[:])', r'\1 .pl .ow \2', raw_styles)
-        # Original scripts stay inside orig_body (left panel), not in our script block
         stats_m = re.search(r'(\d+)\s*messages.*?(\d+)\s*sessions', orig)
         orig_label = f"{stats_m.group(1)} messages &middot; {stats_m.group(2)} sessions" if stats_m else "limited data"
     else:
-        orig_body = '<div style="display:flex;align-items:center;justify-content:center;height:80vh;color:#64748b;font-size:1.1rem;text-align:center;padding:2rem"><div><p style="font-size:2rem;margin-bottom:1rem">No /insights report found</p><p>Run <code>/insights</code> in Claude Code first,<br>then run this again to see the comparison.</p></div></div>'
-        orig_styles = ""
-        orig_label = "not available"
+        orig_label = "run /insights first"
 
     nav_links = """<div class="nav-row">
       <a onclick="scrollTo_('work')">What You Work On</a>
@@ -345,8 +335,6 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 .pr{{background:#f0f4f8}}
 .pr .lb{{position:sticky;top:0;z-index:10;background:#ecfdf5;color:#065f46;text-align:center;padding:.35rem;font-weight:600;font-size:.75rem;border-bottom:2px solid #6ee7b7}}
 .rp{{padding:1.5rem}}
-/* Original report styles scoped to left panel */
-{orig_styles}
 /* Right panel styles */
 .muted{{color:#64748b;font-size:.85rem}}
 .rp-stats{{display:flex;gap:12px;margin-bottom:24px;padding:16px 0;border-top:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;flex-wrap:wrap}}
@@ -385,7 +373,7 @@ body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background
 <div class="split" id="split">
   <div class="panel pl" id="left-panel">
     <div class="lb">ORIGINAL /insights &mdash; <span class="s">{orig_label}</span></div>
-    <div class="ow">{orig_body}</div>
+    <iframe class="ow" id="orig-frame" srcdoc="" style="width:100%;border:none;height:calc(100vh - 110px)"></iframe>
   </div>
   <div class="panel pr" id="right-panel">
     <div class="lb">BETTER INSIGHTS &mdash; {i['human_msgs']:,} messages &middot; {i['count']} sessions &middot; {i_per_day} msgs/day</div>
@@ -415,6 +403,11 @@ function scrollTo_(id) {{
     var panelRect = panel.getBoundingClientRect();
     panel.scrollTo({{ top: panel.scrollTop + rect.top - panelRect.top - stickyH - 10, behavior: 'smooth' }});
   }}
+}}
+// Load original report into iframe
+var frame = document.getElementById('orig-frame');
+if (frame) {{
+  frame.src = 'report.html';
 }}
 </script>
 </body></html>"""
